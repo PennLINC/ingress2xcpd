@@ -1,11 +1,15 @@
 """Parser."""
 
+
 def _build_parser(**kwargs):
     """Build parser object.
 
     ``kwargs`` are passed to ``argparse.ArgumentParser`` (mainly useful for debugging).
     """
-    from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+    from argparse import (
+        ArgumentDefaultsHelpFormatter,
+        ArgumentParser,
+    )
     from functools import partial
     from pathlib import Path
 
