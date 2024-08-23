@@ -13,8 +13,11 @@ def ingress2qsirecon(**kwargs):
     output_dir = kwargs["output_dir"]
     input_pipeline = kwargs["input_pipeline"]
     participant_label = kwargs["participant_label"]
+    check_gradients = kwargs["check_gradients"]
     dry_run = kwargs["dry_run"]
     symlink = kwargs["symlink"]
+
+    # Get list of subjects with valid data
 
 
 def main():

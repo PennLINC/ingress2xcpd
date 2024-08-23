@@ -37,13 +37,13 @@ def _build_parser(**kwargs):
         action="store",
         type=PathExists,
         help="Root folder of dataset to ingress, e.g., HCP1200 or UKB. "
-        "Should contain subject folders (e.g., '100307' for HCP)",
+        "Should contain subject folders (e.g., '100307' for HCP).",
     )
     parser.add_argument(
         "output_dir",
         action="store",
         type=Path,
-        help="The output path for restructured data",
+        help="The output path for restructured data.",
     )
     parser.add_argument(
         "input_pipeline",
@@ -62,7 +62,15 @@ def _build_parser(**kwargs):
         nargs="+",
         type=_drop_sub,
         help="A space delimited list of subject folder names / identifiers to process "
-        "(e.g., '100307' for HCP). If not specified, all found folders will be processed. ",
+        "(e.g., '100307' for HCP). If not specified, all found folders will be processed. "
+        "Currently runs subjects serially.",
+    )
+    optional.add_argument(
+        "--check_gradients",
+        "--check-gradients",
+        action="store_true",
+        default=False,
+        help="Run dwigradcheck on gradient table. This adds a lot of time to the processing. ",
     )
     optional.add_argument(
         "--dry-run",
