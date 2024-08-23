@@ -6,6 +6,7 @@ authors = ["Steven Meisler <smeisler13@gmail.com>"]
 readme = "README.md"
 packages = [{include = "ingress2qsirecon"}]
 
+
 [tool.poetry.scripts]
 ingress2qsirecon = "ingress2qsirecon.cli.main:main"
 

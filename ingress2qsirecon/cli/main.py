@@ -6,8 +6,15 @@ from ingress2qsirecon.cli.parser import _build_parser
 
 
 @beartype
-def ingress2qsirecon():
+def ingress2qsirecon(**kwargs):
     print("Hello, World!")
+    # Get the command line arguments
+    input_dir = kwargs["input_dir"]
+    output_dir = kwargs["output_dir"]
+    input_pipeline = kwargs["input_pipeline"]
+    participant_label = kwargs["participant_label"]
+    dry_run = kwargs["dry_run"]
+    symlink = kwargs["symlink"]
 
 
 def main():

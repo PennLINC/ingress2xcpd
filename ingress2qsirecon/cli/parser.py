@@ -46,7 +46,7 @@ def _build_parser(**kwargs):
         help="The output path for restructured data",
     )
     parser.add_argument(
-        "input-pipeline",
+        "input_pipeline",
         action="store",
         choices=["hcpya", "ukb"],
         help="specify which pipeline was used to create the data specified "
