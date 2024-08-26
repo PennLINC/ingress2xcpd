@@ -6,7 +6,9 @@
 import os
 import re
 from pathlib import Path
-from warnings import warn
+from nipype import logging
+import nibabel as nb
+import numpy as np
 
 from nipype.interfaces.base import (
     BaseInterface,
@@ -18,6 +20,8 @@ from nipype.interfaces.base import (
     TraitedSpec,
     traits,
 )
+
+LOGGER = logging.getLogger("nipype.interface")
 
 DIR_PATTERNS = {
     'hcpya': re.compile("(\d+)"),  # HCP is just a number
@@ -136,7 +140,7 @@ class CreateLayout(SimpleInterface):
                 file_type for file_type in required_for_any_recon if not os.path.isfile(file_paths[file_type])
             ]
             if missing_for_any_recon:
-                warn(
+                LOGGER.warning(
                     f"Required files missing for any recon: {missing_for_any_recon}. "
                     "These are expected at the following locations: "
                     f"{[file_type + ': ' + str(file_paths[file_type]) for file_type in missing_for_any_recon]}. "
@@ -160,8 +164,8 @@ class CreateLayout(SimpleInterface):
         # Raise warnings for requested subjects not in layout
         missing_particpants = sorted(set(participant_label) - set([subject["subject"] for subject in layout]))
         if missing_particpants:
-            warn(
-                f"Requested {missing_particpants} not found in layout, please confirm their data exists and are properly organized."
+            LOGGER.warning(
+                f"Requested participant(s) {missing_particpants} not found in layout, please confirm their data exists and are properly organized."
             )
 
         # Stop code if layout is empty
@@ -173,6 +177,93 @@ class CreateLayout(SimpleInterface):
         return runtime
 
 
+class _ConformDwiInputSpec(BaseInterfaceInputSpec):
+    dwi_file = File(mandatory=True, desc="dwi image")
+    bval_file = File(exists=True)
+    bvec_file = File(exists=True)
+    orientation = traits.Enum("LPS", "LAS", default="LPS", usedefault=True)
+
+
+class _ConformDwiOutputSpec(TraitedSpec):
+    dwi_file = File(exists=True, desc="conformed dwi image")
+    bvec_file = File(exists=True, desc="conformed bvec file")
+    bval_file = File(exists=True, desc="conformed bval file")
+    out_report = File(exists=True, desc="HTML segment containing warning")
+
+
+class ConformDwi(SimpleInterface):
+    """Conform a series of dwi images to enable merging.
+    Performs three basic functions:
+    #. Orient image to requested orientation
+    #. Validate the qform and sform, set qform code to 1
+    #. Flip bvecs accordingly
+    #. Do nothing to the bvals
+    Note: This is not as nuanced as fmriprep's version
+    """
+
+    input_spec = _ConformDwiInputSpec
+    output_spec = _ConformDwiOutputSpec
+
+    def _run_interface(self, runtime):
+        fname = self.inputs.dwi_file
+        orientation = self.inputs.orientation
+        suffix = "_" + orientation
+        out_fname = fname_presuffix(fname, suffix=suffix, newpath=runtime.cwd)
+
+        # If not defined, find it
+        if isdefined(self.inputs.bval_file):
+            bval_fname = self.inputs.bval_file
+        else:
+            bval_fname = fname_presuffix(fname, suffix=".bval", use_ext=False)
+
+        if isdefined(self.inputs.bvec_file):
+            bvec_fname = self.inputs.bvec_file
+        else:
+            bvec_fname = fname_presuffix(fname, suffix=".bvec", use_ext=False)
+
+        out_bvec_fname = fname_presuffix(bvec_fname, suffix=suffix, newpath=runtime.cwd)
+        validator = ValidateImage(in_file=fname)
+        validated = validator.run()
+        self._results["out_report"] = validated.outputs.out_report
+        input_img = nb.load(validated.outputs.out_file)
+
+        input_axcodes = nb.aff2axcodes(input_img.affine)
+        # Is the input image oriented how we want?
+        new_axcodes = tuple(orientation)
+
+        if not input_axcodes == new_axcodes:
+            # Re-orient
+            LOGGER.info("Re-orienting %s to %s", fname, orientation)
+            input_orientation = nb.orientations.axcodes2ornt(input_axcodes)
+            desired_orientation = nb.orientations.axcodes2ornt(new_axcodes)
+            transform_orientation = nb.orientations.ornt_transform(
+                input_orientation, desired_orientation
+            )
+            reoriented_img = input_img.as_reoriented(transform_orientation)
+            reoriented_img.to_filename(out_fname)
+            self._results["dwi_file"] = out_fname
+
+            # Flip the bvecs
+            if os.path.exists(bvec_fname):
+                LOGGER.info("Reorienting %s to %s", bvec_fname, orientation)
+                bvec_array = np.loadtxt(bvec_fname)
+                if not bvec_array.shape[0] == transform_orientation.shape[0]:
+                    raise ValueError("Unrecognized bvec format")
+                output_array = np.zeros_like(bvec_array)
+                for this_axnum, (axnum, flip) in enumerate(transform_orientation):
+                    output_array[this_axnum] = bvec_array[int(axnum)] * flip
+                np.savetxt(out_bvec_fname, output_array, fmt="%.8f ")
+                self._results["bvec_file"] = out_bvec_fname
+                self._results["bval_file"] = bval_fname
+
+        else:
+            LOGGER.info("Not applying reorientation to %s: already in %s", fname, orientation)
+            self._results["dwi_file"] = fname
+            if os.path.exists(bvec_fname):
+                self._results["bvec_file"] = bvec_fname
+                self._results["bval_file"] = bval_fname
+
+        return runtime
 ####################################
 
 

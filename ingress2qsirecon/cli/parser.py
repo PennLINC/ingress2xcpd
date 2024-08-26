@@ -81,19 +81,19 @@ def _build_parser(**kwargs):
         "--check-gradients",
         action="store_true",
         default=False,
-        help="Run dwigradcheck on gradient table. This adds a lot of time to the processing. ",
+        help="NOT IMPLEMENTED YET. Run dwigradcheck on gradient table. This adds a lot of time to the processing. ",
     )
     optional.add_argument(
         "--dry-run",
         "--dry_run",
         action="store_true",
         default=False,
-        help="Will return file reorganization mappings without performing the reorganization.",
+        help="NOT IMPLEMENTED YET. Will return file reorganization mappings without performing the reorganization.",
     )
     optional.add_argument(
         "--symlink",
         action="store_true",
         default=False,
-        help="Rather than copying files, create symlinks (shortcuts) in the output directory.",
+        help="NOT IMPLEMENTED YET. Rather than copying files, create symlinks (shortcuts) in the output directory.",
     )
     return parser

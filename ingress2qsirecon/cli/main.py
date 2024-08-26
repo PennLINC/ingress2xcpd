@@ -29,6 +29,10 @@ def ingress2qsirecon(**kwargs):
     dry_run = kwargs["dry_run"]
     symlink = kwargs["symlink"]
 
+    # Raise NotImplemented errors for options not implemented yet
+    if check_gradients or dry_run or symlink:
+        raise NotImplementedError("--check_gradients, --dry_run, and --symlink are not implemented yet.")
+
     # if workdir doesn't exist, create it
     # TMP REMOVE WORK_DIR
     if work_dir.exists():
