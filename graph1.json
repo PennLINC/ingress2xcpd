@@ -1,0 +1,19 @@
+{
+    "groups": [{"name": "Group_00001", "procs": [0, 1], "total": 2}],
+    "links": [{"source": 0, "target": 1, "value": 1}],
+    "maxN": 2,
+    "nodes": [
+        {
+            "group": 1,
+            "name": "0_create_layout",
+            "report": "/create_layout/_report/report.rst",
+            "result": "/create_layout/result_create_layout.pklz",
+        },
+        {
+            "group": 1,
+            "name": "1_collect_participants",
+            "report": "/collect_participants/_report/report.rst",
+            "result": "/collect_participants/result_collect_participants.pklz",
+        },
+    ],
+}

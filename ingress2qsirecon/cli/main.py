@@ -1,23 +1,68 @@
 from __future__ import annotations
 
+import os
+import shutil
+from pathlib import Path
+
 from beartype import beartype
+from nipype import (
+    Node,
+    Workflow,
+)
 
 from ingress2qsirecon.cli.parser import _build_parser
+from ingress2qsirecon.utils.utils import (
+    CollectParticipants,
+    CreateLayout,
+)
 
 
 @beartype
 def ingress2qsirecon(**kwargs):
-    print("Hello, World!")
     # Get the command line arguments
-    input_dir = kwargs["input_dir"]
-    output_dir = kwargs["output_dir"]
+    input_dir = Path(kwargs["input_dir"])
+    output_dir = Path(kwargs["output_dir"])
     input_pipeline = kwargs["input_pipeline"]
     participant_label = kwargs["participant_label"]
+    work_dir = Path(kwargs["work_dir"])
     check_gradients = kwargs["check_gradients"]
     dry_run = kwargs["dry_run"]
     symlink = kwargs["symlink"]
 
-    # Get list of subjects with valid data
+    # if workdir doesn't exist, create it
+    # TMP REMOVE WORK_DIR
+    if work_dir.exists():
+        shutil.rmtree(work_dir, ignore_errors=True)
+
+    if not work_dir.exists():
+        work_dir.mkdir(parents=True)
+    os.chdir(work_dir)
+
+    # If participant_label not defined, make it empty list
+    if participant_label is None:
+        participant_label = []
+
+    # Create overall workflow
+    workflow = Workflow(name="ingress2qsirecon_wf", base_dir=work_dir)
+
+    # Create subject gathering nodes
+    create_layout_node = Node(CreateLayout(), name="create_layout")
+    create_layout_node.inputs.input_dir = input_dir
+    create_layout_node.inputs.input_pipeline = input_pipeline
+    create_layout_node.inputs.participant_label = participant_label
+
+    workflow.add_nodes([create_layout_node])
+    workflow.run()
+
+    # collect_participants_node = Node(CollectParticipants(), name="collect_participants")
+    # collect_participants_node.inputs.participant_label = participant_label
+
+    # workflow.add_nodes([create_layout_node, collect_participants_node])
+    # workflow.connect(create_layout_node, "layout", collect_participants_node, "layout")
+    # workflow.run()
+
+    # participants_to_run = collect_participants_node.outputs.participants
+    # print(f"Participants to run: {participants_to_run}")
 
 
 def main():

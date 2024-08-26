@@ -6,14 +6,13 @@ def _build_parser(**kwargs):
 
     ``kwargs`` are passed to ``argparse.ArgumentParser`` (mainly useful for debugging).
     """
+    import os
     from argparse import (
         ArgumentDefaultsHelpFormatter,
         ArgumentParser,
     )
     from functools import partial
     from pathlib import Path
-
-    from packaging.version import Version
 
     def _path_exists(path, parser):
         """Ensure a given path exists."""
@@ -54,6 +53,8 @@ def _build_parser(**kwargs):
         "the HCP young adult minimal preprocessing pipeline and 'ukb' for data processed "
         "with the UK BioBank minimal preprocessing pipeline.",
     )
+
+    # Optional arguments
     optional = parser.add_argument_group("Optional arguments")
     optional.add_argument(
         "--participant-label",
@@ -64,6 +65,16 @@ def _build_parser(**kwargs):
         help="A space delimited list of subject folder names / identifiers to process "
         "(e.g., '100307' for HCP). If not specified, all found folders will be processed. "
         "Currently runs subjects serially.",
+    )
+    optional.add_argument(
+        "--work_dir",
+        "--work-dir",
+        "-w",
+        action="store",
+        type=Path,
+        default=Path(os.getcwd()),
+        help="The working directory for the processing. "
+        "If not specified, the current working directory will be used.",
     )
     optional.add_argument(
         "--check_gradients",
