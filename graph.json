@@ -1,4 +1,0 @@
-[
-    {"group": 1, "imports": [], "name": "0_create_layout", "size": 1},
-    {"group": 1, "imports": ["0_create_layout"], "name": "1_collect_participants", "size": 1},
-]
