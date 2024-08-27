@@ -64,6 +64,7 @@ def get_file_paths(subject_dir: Path, input_pipeline: str, subject_label: str) -
             "t1w_brain": ["T1w", "T1w_acpc_dc_restore_brain.nii.gz"],
             "brain_mask": ["T1w", "brainmask_fs.nii.gz"],
             "subject2MNI": ["MNINonLinear", "xfms", "acpc_dc2standard.nii.gz"],  # Note this is MNI152NLin6Asym
+            "MNI2subject": ["MNINonLinear", "xfms", "standard2acpc_dc.nii.gz"],
             "freesurfer": ["T1w", subject_label],
         },
         "ukb": {
@@ -89,8 +90,43 @@ def get_file_paths(subject_dir: Path, input_pipeline: str, subject_label: str) -
     return file_paths
 
 
+def make_bids_file_paths(subject_layout: dict) -> dict:
+    """Get file paths within a subject directory.
+
+    Parameters
+    ----------
+    subject_layout : :obj:`dict`
+        A dictionary of subject information from the CreateLayout function.
+
+    Returns
+    -------
+    bids_file_paths : :obj:`dict`
+        A dictionary of BIDS-ified file paths.
+    """
+    bids_dwi_file = str(subject_layout["bids_dwi_file"])
+    bids_dwi_base = bids_dwi_file.replace(".nii.gz", "")
+    #bids_anat_base = dir(bids_dwi_base).replace("dwi", "anat")
+    bval_file = bids_dwi_base + ".bval"
+    bvec_file = bids_dwi_base + ".bvec"
+    b_file = bids_dwi_base + ".b"
+    dwiref_file = bids_dwi_file.replace("dwi", "dwiref")
+
+    # Now for optional files
+    #if subject_layout['brain_mask_file']:
+    #    bids_brain_mask_file = str(subject_layout["brain_mask_file"])
+
+    bids_file_paths = {
+        "bids_bvals": Path(bval_file),
+        "bids_bvecs": Path(bvec_file),
+        "bids_b": Path(b_file),
+        "bids_dwiref": Path(dwiref_file),
+    }
+    return bids_file_paths
+
+
 class _CreateLayoutInputSpec(BaseInterfaceInputSpec):
     input_dir = Directory(exists=True, mandatory=True, desc="Path to the input directory")
+    output_dir = Directory(exists=True, mandatory=True, desc="Path to the output directory")
     input_pipeline = Str(mandatory=True, desc="Name of the input pipeline")
     participant_label = traits.List(Str, desc="List of participant labels to search for")
 
@@ -105,6 +141,7 @@ class CreateLayout(SimpleInterface):
 
     def _run_interface(self, runtime):
         input_dir = Path(self.inputs.input_dir)
+        output_dir = Path(self.inputs.output_dir)
         input_pipeline = self.inputs.input_pipeline
         participant_label = self.inputs.participant_label
         pattern = DIR_PATTERNS[input_pipeline]  # search pattern for subject ID, session etc
@@ -120,19 +157,14 @@ class CreateLayout(SimpleInterface):
                 # Skip if subject folder does not match expected pattern
                 continue
 
-            # Look for data files, make sure at least required ones are present
-            # Placeholder for missing_from_subject_dir function
-            # if missing_from_subject_dir(potential_dir):
-            #     continue
-
             # If passes all checks, add to layout
             if input_pipeline == "hcpya":
                 subject = match.group(1)
-                fake_dwi_file = f"/bids/sub-{subject}/dwi/sub-{subject}_dwi.nii.gz"
+                fake_dwi_file = output_dir / f"sub-{subject}" / "dwi" / f"sub-{subject}_dwi.nii.gz"
             elif input_pipeline == "ukb":
                 subject, ses_major, ses_minor = match.groups()
                 renamed_ses = "%02d%02d" % (int(ses_major), int(ses_minor))
-                fake_dwi_file = f"/bids/sub-{subject}/ses-{renamed_ses}/dwi/sub-{subject}_ses-{renamed_ses}_dwi.nii.gz"
+                fake_dwi_file = output_dir / f"sub-{subject}" / f"ses-{renamed_ses}" / "dwi" / f"sub-{subject}_ses-{renamed_ses}_dwi.nii.gz"
 
             file_paths = get_file_paths(potential_dir, input_pipeline, subject)
             # check if any required files do not exist
@@ -156,6 +188,9 @@ class CreateLayout(SimpleInterface):
             }
             # Add file paths to subject layout if they exist
             subject_layout.update({file_type: path for file_type, path in file_paths.items() if os.path.exists(path)})
+            # Make BIDS-file path names
+            subject_layout.update(make_bids_file_paths(subject_layout))
+            # Save out layout
             layout.append(subject_layout)
 
         # Sort layout by subject ID

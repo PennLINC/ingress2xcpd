@@ -33,14 +33,20 @@ def ingress2qsirecon(**kwargs):
     if check_gradients or dry_run or symlink:
         raise NotImplementedError("--check_gradients, --dry_run, and --symlink are not implemented yet.")
 
-    # if workdir doesn't exist, create it
     # TMP REMOVE WORK_DIR
     if work_dir.exists():
         shutil.rmtree(work_dir, ignore_errors=True)
-
+    # if workdir doesn't exist, create it
     if not work_dir.exists():
         work_dir.mkdir(parents=True)
     os.chdir(work_dir)
+
+    # If output_dir doesn't exist, create it
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True)
+    # Move BIDS scaffold files there
+    #ingress2reccon_dir = Path(__file__).parent
+    #shutil.copytree(input_dir, output_dir / "scaffold")
 
     # If participant_label not defined, make it empty list
     if participant_label is None:
@@ -52,6 +58,7 @@ def ingress2qsirecon(**kwargs):
     # Create subject gathering nodes
     create_layout_node = Node(CreateLayout(), name="create_layout")
     create_layout_node.inputs.input_dir = input_dir
+    create_layout_node.inputs.output_dir = output_dir
     create_layout_node.inputs.input_pipeline = input_pipeline
     create_layout_node.inputs.participant_label = participant_label
 
