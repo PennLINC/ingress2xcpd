@@ -25,34 +25,37 @@ from nipype.interfaces.base import (
 
 LOGGER = logging.getLogger("nipype.interface")
 
-# Define directory naming patterns for different pipelines
-DIR_PATTERNS = {
-    'hcpya': re.compile("(\d+)"),  # HCP is just a number
-    'ukb': re.compile("(\d+)_(\d+)_(\d+)"),  # UKB has three numbers for subject, session major, and session minor
-}
-
-# Define file path organization for different pipelines
-# Relative to input_dir/subject_dir
-ORGANIZATIONS = {
+# Files: file paths relative to subject input folder
+# MNI: MNI template version
+# DIR_PATTERN: regex pattern for subject ID within input folder
+PIPELINE_INFO = {
     "hcpya": {
-        "bvals": ["T1w", "Diffusion", "bvals"],
-        "bvecs": ["T1w", "Diffusion", "bvecs"],
-        "dwi": ["T1w", "Diffusion", "data.nii.gz"],
-        "t1w_brain": ["T1w", "T1w_acpc_dc_restore_brain.nii.gz"],
-        "brain_mask": ["T1w", "brainmask_fs.nii.gz"],
-        "subject2MNI": ["MNINonLinear", "xfms", "acpc_dc2standard.nii.gz"],  # Note this is MNI152NLin6Asym
-        "MNI2subject": ["MNINonLinear", "xfms", "standard2acpc_dc.nii.gz"],
+        "files": {
+            "bvals": ["T1w", "Diffusion", "bvals"],
+            "bvecs": ["T1w", "Diffusion", "bvecs"],
+            "dwi": ["T1w", "Diffusion", "data.nii.gz"],
+            "t1w_brain": ["T1w", "T1w_acpc_dc_restore_brain.nii.gz"],
+            "brain_mask": ["T1w", "brainmask_fs.nii.gz"],
+            "subject2MNI": ["MNINonLinear", "xfms", "acpc_dc2standard.nii.gz"],
+            "MNI2subject": ["MNINonLinear", "xfms", "standard2acpc_dc.nii.gz"],
+        },
+        "MNI_TEMPLATE": "MNI152NLin6Asym",
+        "DIR_PATTERN": re.compile("(\d+)"),
     },
     "ukb": {
-        "bvals": ["DTI", "dMRI", "dMRI", "bvals"],
-        "bvecs": ["DTI", "dMRI", "dMRI", "bvecs"],
-        "dwi": ["DTI", "dMRI", "dMRI", "data_ud.nii.gz"],
-        "dwiref": ["DTI", "dMRI", "dMRI", "dti_FA.nii.gz"],
-        "t1w_brain": ["T1", "T1_unbiased_brain.nii.gz"],
-        "brain_mask": ["T1", "T1_brain_mask.nii.gz"],
-        # TODO: Add UKB XFM path
-        # "subject2MNI": ["MNINonLinear", "xfms", "acpc_dc2standard.nii.gz"], # Note this is MNI152NLin6Asym
-        # "MNI2subject": ["MNINonLinear", "xfms", "standard2acpc_dc.nii.gz"], # Note this is MNI152NLin6Asym
+        "files": {
+            "bvals": ["DTI", "dMRI", "dMRI", "bvals"],
+            "bvecs": ["DTI", "dMRI", "dMRI", "bvecs"],
+            "dwi": ["DTI", "dMRI", "dMRI", "data_ud.nii.gz"],
+            "dwiref": ["DTI", "dMRI", "dMRI", "dti_FA.nii.gz"],
+            "t1w_brain": ["T1", "T1_unbiased_brain.nii.gz"],
+            "brain_mask": ["T1", "T1_brain_mask.nii.gz"],
+            # TODO: Add UKB XFM path
+            # "subject2MNI": ["MNINonLinear", "xfms", "acpc_dc2standard.nii.gz"], # Note this is MNI152NLin6Asym
+            # "MNI2subject": ["MNINonLinear", "xfms", "standard2acpc_dc.nii.gz"], # Note this is MNI152NLin6Asym
+        },
+        "MNI_TEMPLATE": "MNI152NLin6Asym",
+        "DIR_PATTERN": re.compile("(\d+)_(\d+)_(\d+)"),
     },
 }
 
@@ -81,7 +84,7 @@ def get_file_paths(subject_dir: Path, input_pipeline: str) -> dict:
     """
 
     # Get organization for input pipeline
-    organization = ORGANIZATIONS[input_pipeline]
+    organization = PIPELINE_INFO[input_pipeline]['files']
 
     # Get and return file paths
     file_paths = {}
@@ -105,17 +108,18 @@ def make_bids_file_paths(subject_layout: dict) -> dict:
     """
     bids_base = str(subject_layout["bids_base"])
     subject = str(subject_layout["subject"])
-    session = str(subject_layout["session"])
-    if session is not None:
-        session_string = f"_ses-{session}"
+    session = subject_layout["session"]
+    if session == None:
+        sub_session_string = f"sub-{subject}"
     else:
-        session_string = ""
+        sub_session_string = f"sub-{subject}_ses-{session}"
+    mni_template = str(subject_layout["MNI_template"])
 
-    bids_dwi_file = os.path.join(bids_base, "dwi", subject + session_string + "_dwi.nii.gz")
-    bids_bval_file = os.path.join(bids_base, "dwi", subject + session_string + "_dwi.bval")
-    bids_bvec_file = os.path.join(bids_base, "dwi", subject + session_string + "_dwi.bvec")
-    bids_b_file = os.path.join(bids_base, "dwi", subject + session_string + "_dwi.b")
-    bids_dwiref_file = os.path.join(bids_base, "dwi", subject + session_string + "_dwiref.nii.gz")
+    bids_dwi_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.nii.gz")
+    bids_bval_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.bval")
+    bids_bvec_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.bvec")
+    bids_b_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.b")
+    bids_dwiref_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwiref.nii.gz")
 
     bids_file_paths = {
         "bids_dwi": Path(bids_dwi_file),
@@ -127,11 +131,21 @@ def make_bids_file_paths(subject_layout: dict) -> dict:
 
     # Now for optional files
     if subject_layout['t1w_brain']:
-        bids_t1w_brain = os.path.join(bids_base, "anat", subject + session_string + "_desc-preproc_T1w.nii.gz")
+        bids_t1w_brain = os.path.join(bids_base, "anat", sub_session_string + "_desc-preproc_T1w.nii.gz")
         bids_file_paths.update({"bids_t1w_brain": Path(bids_t1w_brain)})
     if subject_layout['brain_mask']:
-        bids_brain_mask = os.path.join(bids_base, "anat", subject + session_string + "_desc-brain_mask.nii.gz")
+        bids_brain_mask = os.path.join(bids_base, "anat", sub_session_string + "_desc-brain_mask.nii.gz")
         bids_file_paths.update({"bids_brain_mask": Path(bids_brain_mask)})
+    if subject_layout['subject2MNI']:
+        bids_subject2MNI = os.path.join(
+            bids_base, "anat", sub_session_string + f"_from-T1w_to-{mni_template}_mode-image_xfm.h5"
+        )
+        bids_file_paths.update({"bids_subject2MNI": Path(bids_subject2MNI)})
+    if subject_layout['MNI2subject']:
+        bids_MNI2subject = os.path.join(
+            bids_base, "anat", sub_session_string + f"_from-{mni_template}_to-T1w_mode-image_xfm.h5"
+        )
+        bids_file_paths.update({"bids_MNI2subject": Path(bids_MNI2subject)})
 
     return bids_file_paths
 
@@ -156,7 +170,8 @@ class CreateLayout(SimpleInterface):
         output_dir = Path(self.inputs.output_dir)
         input_pipeline = self.inputs.input_pipeline
         participant_label = self.inputs.participant_label
-        pattern = DIR_PATTERNS[input_pipeline]  # search pattern for subject ID, session etc
+        pattern = PIPELINE_INFO[input_pipeline]["DIR_PATTERN"]  # search pattern for subject ID, session etc
+        MNI_template = PIPELINE_INFO[input_pipeline]["MNI_TEMPLATE"]
 
         layout = []
         for potential_dir in input_dir.iterdir():  # loop through all directories in input_dir
@@ -201,6 +216,7 @@ class CreateLayout(SimpleInterface):
                 "session": renamed_ses,
                 "path": Path(potential_dir),
                 "bids_base": bids_base,
+                "MNI_template": MNI_template,
             }
             # Add file paths to subject layout if they exist
             subject_layout.update({file_type: path for file_type, path in file_paths.items() if os.path.exists(path)})
