@@ -12,10 +12,7 @@ from nipype import (
 
 import ingress2qsirecon
 from ingress2qsirecon.cli.parser import _build_parser
-from ingress2qsirecon.utils.utils import (
-    CollectParticipants,
-    CreateLayout,
-)
+from ingress2qsirecon.utils.functions import create_layout
 
 
 @beartype
@@ -47,21 +44,27 @@ def _ingress2qsirecon(**kwargs):
         output_dir.mkdir(parents=True)
     # Move BIDS scaffold files there
     ingress2recon_dir = os.path.dirname(ingress2qsirecon.__file__)
-    shutil.copytree(os.path.join(ingress2recon_dir, "data", "bids_scaffold"), output_dir, dirs_exist_ok=True)
+    if not os.path.exists(os.path.join(output_dir, "dataset_description.json")):
+        shutil.copytree(os.path.join(ingress2recon_dir, "data", "bids_scaffold"), output_dir, dirs_exist_ok=True)
 
     # If participant_label not defined, make it empty list
     if participant_label is None:
         participant_label = []
 
+    # Make layout with all data to be ingressed
+    layout = create_layout(input_dir, output_dir, input_pipeline, participant_label)
+
+    subjects_to_run = [item["subject"] for item in layout]
+
     # Create overall workflow
     workflow = Workflow(name="ingress2qsirecon_wf", base_dir=work_dir)
 
     # Create subject gathering nodes
-    create_layout_node = Node(CreateLayout(), name="create_layout")
-    create_layout_node.inputs.input_dir = input_dir
-    create_layout_node.inputs.output_dir = output_dir
-    create_layout_node.inputs.input_pipeline = input_pipeline
-    create_layout_node.inputs.participant_label = participant_label
+    # create_layout_node = Node(CreateLayout(), name="create_layout")
+    # create_layout_node.inputs.input_dir = input_dir
+    # create_layout_node.inputs.output_dir = output_dir
+    # create_layout_node.inputs.input_pipeline = input_pipeline
+    # create_layout_node.inputs.participant_label = participant_label
 
     # Conform DWI node
 
@@ -69,8 +72,10 @@ def _ingress2qsirecon(**kwargs):
 
     # FNIRT-to-IRK node
 
-    workflow.add_nodes([create_layout_node])
-    workflow.run()
+    # Convert to other MNI node
+
+    # workflow.add_nodes([create_layout_node])
+    # workflow.run()
 
 
 def main():
