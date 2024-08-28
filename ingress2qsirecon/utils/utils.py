@@ -5,11 +5,13 @@
 
 import os
 import re
+import shutil
 from pathlib import Path
-from nipype import logging
+from textwrap import indent
+
 import nibabel as nb
 import numpy as np
-
+from nipype import logging
 from nipype.interfaces.base import (
     BaseInterface,
     BaseInterfaceInputSpec,
@@ -23,10 +25,37 @@ from nipype.interfaces.base import (
 
 LOGGER = logging.getLogger("nipype.interface")
 
+# Define directory naming patterns for different pipelines
 DIR_PATTERNS = {
     'hcpya': re.compile("(\d+)"),  # HCP is just a number
     'ukb': re.compile("(\d+)_(\d+)_(\d+)"),  # UKB has three numbers for subject, session major, and session minor
 }
+
+# Define file path organization for different pipelines
+# Relative to input_dir/subject_dir
+ORGANIZATIONS = {
+    "hcpya": {
+        "bvals": ["T1w", "Diffusion", "bvals"],
+        "bvecs": ["T1w", "Diffusion", "bvecs"],
+        "dwi": ["T1w", "Diffusion", "data.nii.gz"],
+        "t1w_brain": ["T1w", "T1w_acpc_dc_restore_brain.nii.gz"],
+        "brain_mask": ["T1w", "brainmask_fs.nii.gz"],
+        "subject2MNI": ["MNINonLinear", "xfms", "acpc_dc2standard.nii.gz"],  # Note this is MNI152NLin6Asym
+        "MNI2subject": ["MNINonLinear", "xfms", "standard2acpc_dc.nii.gz"],
+    },
+    "ukb": {
+        "bvals": ["DTI", "dMRI", "dMRI", "bvals"],
+        "bvecs": ["DTI", "dMRI", "dMRI", "bvecs"],
+        "dwi": ["DTI", "dMRI", "dMRI", "data_ud.nii.gz"],
+        "dwiref": ["DTI", "dMRI", "dMRI", "dti_FA.nii.gz"],
+        "t1w_brain": ["T1", "T1_unbiased_brain.nii.gz"],
+        "brain_mask": ["T1", "T1_brain_mask.nii.gz"],
+        # TODO: Add UKB XFM path
+        # "subject2MNI": ["MNINonLinear", "xfms", "acpc_dc2standard.nii.gz"], # Note this is MNI152NLin6Asym
+        # "MNI2subject": ["MNINonLinear", "xfms", "standard2acpc_dc.nii.gz"], # Note this is MNI152NLin6Asym
+    },
+}
+
 # List of files that are required for any recon (some pipelines require others too, this is minimum)
 required_for_any_recon = [
     "bvals",
@@ -35,7 +64,7 @@ required_for_any_recon = [
 ]
 
 
-def get_file_paths(subject_dir: Path, input_pipeline: str, subject_label: str) -> dict:
+def get_file_paths(subject_dir: Path, input_pipeline: str) -> dict:
     """Get file paths within a subject directory.
 
     Parameters
@@ -44,41 +73,12 @@ def get_file_paths(subject_dir: Path, input_pipeline: str, subject_label: str) -
         The path to the ukb subject directory.
     input_pipeline : :obj:`str`
         The input pipeline used to create the subject directory.
-    subject_label : :obj:`str`
-        The subject folder identifier.
-
 
     Returns
     -------
     file_paths : :obj:`dict`
         A dictionary of file paths.
     """
-
-    # Define file path organization for different pipelines
-    # Relative to input_dir/subject_dir
-    ORGANIZATIONS = {
-        "hcpya": {
-            "bvals": ["T1w", "Diffusion", "bvals"],
-            "bvecs": ["T1w", "Diffusion", "bvecs"],
-            "dwi": ["T1w", "Diffusion", "data.nii.gz"],
-            "t1w_brain": ["T1w", "T1w_acpc_dc_restore_brain.nii.gz"],
-            "brain_mask": ["T1w", "brainmask_fs.nii.gz"],
-            "subject2MNI": ["MNINonLinear", "xfms", "acpc_dc2standard.nii.gz"],  # Note this is MNI152NLin6Asym
-            "MNI2subject": ["MNINonLinear", "xfms", "standard2acpc_dc.nii.gz"],
-            "freesurfer": ["T1w", subject_label],
-        },
-        "ukb": {
-            "bvals": ["DTI", "dMRI", "dMRI", "bvals"],
-            "bvecs": ["DTI", "dMRI", "dMRI", "bvecs"],
-            "dwi": ["DTI", "dMRI", "dMRI", "data_ud.nii.gz"],
-            "dwiref": ["DTI", "dMRI", "dMRI", "dti_FA.nii.gz"],
-            # TODO: Add UKB anatomical paths
-            # "t1w_brain": ["T1w", "T1w_acpc_dc_restore_brain.nii.gz"],
-            # "brain_mask": ["T1w", "brainmask_fs.nii.gz"],
-            # "subject2MNI": ["MNINonLinear", "xfms", "acpc_dc2standard.nii.gz"], # Note this is MNI152NLin6Asym
-            # "freesurfer": ["T1w", subject_label], # Note that freesurfer dir is T1w/$SUBJECT_ID, still have to fix this
-        },
-    }
 
     # Get organization for input pipeline
     organization = ORGANIZATIONS[input_pipeline]
@@ -103,24 +103,36 @@ def make_bids_file_paths(subject_layout: dict) -> dict:
     bids_file_paths : :obj:`dict`
         A dictionary of BIDS-ified file paths.
     """
-    bids_dwi_file = str(subject_layout["bids_dwi_file"])
-    bids_dwi_base = bids_dwi_file.replace(".nii.gz", "")
-    #bids_anat_base = dir(bids_dwi_base).replace("dwi", "anat")
-    bval_file = bids_dwi_base + ".bval"
-    bvec_file = bids_dwi_base + ".bvec"
-    b_file = bids_dwi_base + ".b"
-    dwiref_file = bids_dwi_file.replace("dwi", "dwiref")
+    bids_base = str(subject_layout["bids_base"])
+    subject = str(subject_layout["subject"])
+    session = str(subject_layout["session"])
+    if session is not None:
+        session_string = f"_ses-{session}"
+    else:
+        session_string = ""
 
-    # Now for optional files
-    #if subject_layout['brain_mask_file']:
-    #    bids_brain_mask_file = str(subject_layout["brain_mask_file"])
+    bids_dwi_file = os.path.join(bids_base, "dwi", subject + session_string + "_dwi.nii.gz")
+    bids_bval_file = os.path.join(bids_base, "dwi", subject + session_string + "_dwi.bval")
+    bids_bvec_file = os.path.join(bids_base, "dwi", subject + session_string + "_dwi.bvec")
+    bids_b_file = os.path.join(bids_base, "dwi", subject + session_string + "_dwi.b")
+    bids_dwiref_file = os.path.join(bids_base, "dwi", subject + session_string + "_dwiref.nii.gz")
 
     bids_file_paths = {
-        "bids_bvals": Path(bval_file),
-        "bids_bvecs": Path(bvec_file),
-        "bids_b": Path(b_file),
-        "bids_dwiref": Path(dwiref_file),
+        "bids_dwi": Path(bids_dwi_file),
+        "bids_bvals": Path(bids_bval_file),
+        "bids_bvecs": Path(bids_bvec_file),
+        "bids_b": Path(bids_b_file),
+        "bids_dwiref": Path(bids_dwiref_file),
     }
+
+    # Now for optional files
+    if subject_layout['t1w_brain']:
+        bids_t1w_brain = os.path.join(bids_base, "anat", subject + session_string + "_desc-preproc_T1w.nii.gz")
+        bids_file_paths.update({"bids_t1w_brain": Path(bids_t1w_brain)})
+    if subject_layout['brain_mask']:
+        bids_brain_mask = os.path.join(bids_base, "anat", subject + session_string + "_desc-brain_mask.nii.gz")
+        bids_file_paths.update({"bids_brain_mask": Path(bids_brain_mask)})
+
     return bids_file_paths
 
 
@@ -160,13 +172,17 @@ class CreateLayout(SimpleInterface):
             # If passes all checks, add to layout
             if input_pipeline == "hcpya":
                 subject = match.group(1)
-                fake_dwi_file = output_dir / f"sub-{subject}" / "dwi" / f"sub-{subject}_dwi.nii.gz"
+                renamed_ses = None
             elif input_pipeline == "ukb":
                 subject, ses_major, ses_minor = match.groups()
                 renamed_ses = "%02d%02d" % (int(ses_major), int(ses_minor))
-                fake_dwi_file = output_dir / f"sub-{subject}" / f"ses-{renamed_ses}" / "dwi" / f"sub-{subject}_ses-{renamed_ses}_dwi.nii.gz"
 
-            file_paths = get_file_paths(potential_dir, input_pipeline, subject)
+            # Make BIDS base organization
+            bids_base = output_dir / f"sub-{subject}"
+            if renamed_ses:
+                bids_base = bids_base / f"ses-{renamed_ses}"
+
+            file_paths = get_file_paths(potential_dir, input_pipeline)
             # check if any required files do not exist
             missing_for_any_recon = [
                 file_type for file_type in required_for_any_recon if not os.path.isfile(file_paths[file_type])
@@ -182,9 +198,9 @@ class CreateLayout(SimpleInterface):
 
             subject_layout = {
                 "subject": subject,
-                "session": None,
+                "session": renamed_ses,
                 "path": Path(potential_dir),
-                "bids_dwi_file": fake_dwi_file,
+                "bids_base": bids_base,
             }
             # Add file paths to subject layout if they exist
             subject_layout.update({file_type: path for file_type, path in file_paths.items() if os.path.exists(path)})
@@ -212,17 +228,160 @@ class CreateLayout(SimpleInterface):
         return runtime
 
 
+class _ValidateImageInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True, desc="input image")
+    out_file = File(exists=False, desc="validated image")
+
+
+class _ValidateImageOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc="validated image")
+    out_report = File(exists=True, desc="HTML segment containing warning")
+
+
+class ValidateImage(SimpleInterface):
+    """
+    Check the correctness of x-form headers (matrix and code)
+    This interface implements the `following logic
+    <https://github.com/poldracklab/fmriprep/issues/873#issuecomment-349394544>`_:
+    +-------------------+------------------+------------------+------------------\
++------------------------------------------------+
+    | valid quaternions | `qform_code > 0` | `sform_code > 0` | `qform == sform` \
+| actions                                        |
+    +===================+==================+==================+==================\
++================================================+
+    | True              | True             | True             | True             \
+| None                                           |
+    +-------------------+------------------+------------------+------------------\
++------------------------------------------------+
+    | True              | True             | False            | *                \
+| sform, scode <- qform, qcode                   |
+    +-------------------+------------------+------------------+------------------\
++------------------------------------------------+
+    | *                 | *                | True             | False            \
+| qform, qcode <- sform, scode                   |
+    +-------------------+------------------+------------------+------------------\
++------------------------------------------------+
+    | *                 | False            | True             | *                \
+| qform, qcode <- sform, scode                   |
+    +-------------------+------------------+------------------+------------------\
++------------------------------------------------+
+    | *                 | False            | False            | *                \
+| sform, qform <- best affine; scode, qcode <- 1 |
+    +-------------------+------------------+------------------+------------------\
++------------------------------------------------+
+    | False             | *                | False            | *                \
+| sform, qform <- best affine; scode, qcode <- 1 |
+    +-------------------+------------------+------------------+------------------\
++------------------------------------------------+
+    """
+
+    input_spec = _ValidateImageInputSpec
+    output_spec = _ValidateImageOutputSpec
+
+    def _run_interface(self, runtime):
+        img = nb.load(self.inputs.in_file)
+        out_report = os.path.join(runtime.cwd, "report.html")
+
+        # Retrieve xform codes
+        sform_code = int(img.header._structarr["sform_code"])
+        qform_code = int(img.header._structarr["qform_code"])
+
+        # Check qform is valid
+        valid_qform = False
+        try:
+            qform = img.get_qform()
+            valid_qform = True
+        except ValueError:
+            pass
+
+        sform = img.get_sform()
+        if np.linalg.det(sform) == 0:
+            valid_sform = False
+        else:
+            RZS = sform[:3, :3]
+            zooms = np.sqrt(np.sum(RZS * RZS, axis=0))
+            valid_sform = np.allclose(zooms, img.header.get_zooms()[:3])
+
+        # Matching affines
+        matching_affines = valid_qform and np.allclose(qform, sform)
+
+        # Both match, qform valid (implicit with match), codes okay -> do nothing, empty report
+        if matching_affines and qform_code > 0 and sform_code > 0:
+            self._results["out_file"] = self.inputs.in_file
+            open(out_report, "w").close()
+            self._results["out_report"] = out_report
+            return runtime
+
+        # A new file will be written
+        out_fname = self.inputs.out_file
+        self._results["out_file"] = out_fname
+
+        # Row 2:
+        if valid_qform and qform_code > 0 and (sform_code == 0 or not valid_sform):
+            img.set_sform(qform, qform_code)
+            warning_txt = "Note on orientation: sform matrix set"
+            description = """\
+<p class="elem-desc">The sform has been copied from qform.</p>
+"""
+        # Rows 3-4:
+        # Note: if qform is not valid, matching_affines is False
+        elif (valid_sform and sform_code > 0) and (not matching_affines or qform_code == 0):
+            img.set_qform(img.get_sform(), sform_code)
+            warning_txt = "Note on orientation: qform matrix overwritten"
+            description = """\
+<p class="elem-desc">The qform has been copied from sform.</p>
+"""
+            if not valid_qform and qform_code > 0:
+                warning_txt = "WARNING - Invalid qform information"
+                description = """\
+<p class="elem-desc">
+    The qform matrix found in the file header is invalid.
+    The qform has been copied from sform.
+    Checking the original qform information from the data produced
+    by the scanner is advised.
+</p>
+"""
+        # Rows 5-6:
+        else:
+            affine = img.header.get_base_affine()
+            img.set_sform(affine, nb.nifti1.xform_codes["scanner"])
+            img.set_qform(affine, nb.nifti1.xform_codes["scanner"])
+            warning_txt = "WARNING - Missing orientation information"
+            description = """\
+<p class="elem-desc">
+    QSIRecon could not retrieve orientation information from the image header.
+    The qform and sform matrices have been set to a default, LAS-oriented affine.
+    Analyses of this dataset MAY BE INVALID.
+</p>
+"""
+        snippet = '<h3 class="elem-title">%s</h3>\n%s:\n\t %s\n' % (
+            warning_txt,
+            self.inputs.in_file,
+            description,
+        )
+        # Store new file and report
+        img.to_filename(out_fname)
+        with open(out_report, "w") as fobj:
+            fobj.write(indent(snippet, "\t" * 3))
+
+        self._results["out_report"] = out_report
+        return runtime
+
+
 class _ConformDwiInputSpec(BaseInterfaceInputSpec):
-    dwi_file = File(mandatory=True, desc="dwi image")
-    bval_file = File(exists=True)
-    bvec_file = File(exists=True)
+    dwi_in_file = File(mandatory=True, desc="dwi image")
+    bval_in_file = File(exists=True)
+    bvec_in_file = File(exists=True)
+    dwi_out_file = File(desc="conformed dwi image")
+    bval_out_file = File(desc="conformed bval file")
+    bvec_out_file = File(desc="conformed bvec file")
     orientation = traits.Enum("LPS", "LAS", default="LPS", usedefault=True)
 
 
 class _ConformDwiOutputSpec(TraitedSpec):
-    dwi_file = File(exists=True, desc="conformed dwi image")
-    bvec_file = File(exists=True, desc="conformed bvec file")
-    bval_file = File(exists=True, desc="conformed bval file")
+    dwi_out_file = File(exists=True, desc="conformed dwi image")
+    bvec_out_file = File(exists=True, desc="conformed bvec file")
+    bval_out_file = File(exists=True, desc="conformed bval file")
     out_report = File(exists=True, desc="HTML segment containing warning")
 
 
@@ -240,24 +399,15 @@ class ConformDwi(SimpleInterface):
     output_spec = _ConformDwiOutputSpec
 
     def _run_interface(self, runtime):
-        fname = self.inputs.dwi_file
+        dwi_in_file = self.inputs.dwi_in_file
+        bval_in_file = self.inputs.bval_in_file
+        bvec_in_file = self.inputs.bvec_in_file
+        dwi_out_file = self.inputs.dwi_out_file
+        bval_out_file = self.inputs.bval_out_file
+        bvec_out_file = self.inputs.bvec_out_file
         orientation = self.inputs.orientation
-        suffix = "_" + orientation
-        out_fname = fname_presuffix(fname, suffix=suffix, newpath=runtime.cwd)
 
-        # If not defined, find it
-        if isdefined(self.inputs.bval_file):
-            bval_fname = self.inputs.bval_file
-        else:
-            bval_fname = fname_presuffix(fname, suffix=".bval", use_ext=False)
-
-        if isdefined(self.inputs.bvec_file):
-            bvec_fname = self.inputs.bvec_file
-        else:
-            bvec_fname = fname_presuffix(fname, suffix=".bvec", use_ext=False)
-
-        out_bvec_fname = fname_presuffix(bvec_fname, suffix=suffix, newpath=runtime.cwd)
-        validator = ValidateImage(in_file=fname)
+        validator = ValidateImage(in_file=dwi_in_file, out_file=dwi_out_file)
         validated = validator.run()
         self._results["out_report"] = validated.outputs.out_report
         input_img = nb.load(validated.outputs.out_file)
@@ -268,37 +418,40 @@ class ConformDwi(SimpleInterface):
 
         if not input_axcodes == new_axcodes:
             # Re-orient
-            LOGGER.info("Re-orienting %s to %s", fname, orientation)
+            LOGGER.info("Re-orienting %s to %s", dwi_in_file, orientation)
             input_orientation = nb.orientations.axcodes2ornt(input_axcodes)
             desired_orientation = nb.orientations.axcodes2ornt(new_axcodes)
-            transform_orientation = nb.orientations.ornt_transform(
-                input_orientation, desired_orientation
-            )
+            transform_orientation = nb.orientations.ornt_transform(input_orientation, desired_orientation)
             reoriented_img = input_img.as_reoriented(transform_orientation)
-            reoriented_img.to_filename(out_fname)
-            self._results["dwi_file"] = out_fname
+            reoriented_img.to_filename(dwi_out_file)
+            self._results["dwi_file"] = dwi_out_file
 
             # Flip the bvecs
-            if os.path.exists(bvec_fname):
-                LOGGER.info("Reorienting %s to %s", bvec_fname, orientation)
-                bvec_array = np.loadtxt(bvec_fname)
+            if os.path.exists(bvec_in_file):
+                LOGGER.info("Reorienting %s to %s", bvec_in_file, orientation)
+                bvec_array = np.loadtxt(bvec_in_file)
                 if not bvec_array.shape[0] == transform_orientation.shape[0]:
                     raise ValueError("Unrecognized bvec format")
                 output_array = np.zeros_like(bvec_array)
                 for this_axnum, (axnum, flip) in enumerate(transform_orientation):
                     output_array[this_axnum] = bvec_array[int(axnum)] * flip
-                np.savetxt(out_bvec_fname, output_array, fmt="%.8f ")
-                self._results["bvec_file"] = out_bvec_fname
-                self._results["bval_file"] = bval_fname
+                np.savetxt(bvec_out_file, output_array, fmt="%.8f ")
+                self._results["bvec_file"] = bvec_out_file
 
         else:
-            LOGGER.info("Not applying reorientation to %s: already in %s", fname, orientation)
-            self._results["dwi_file"] = fname
-            if os.path.exists(bvec_fname):
-                self._results["bvec_file"] = bvec_fname
-                self._results["bval_file"] = bval_fname
+            LOGGER.info("Not applying reorientation to %s: already in %s", dwi_in_file, orientation)
+            self._results["dwi_file"] = dwi_out_file
+            # Copy and rename bvecs
+            shutil.copy(bvec_in_file, bvec_out_file)
+            self._results["bvec_file"] = bvec_out_file
+
+        # Copy and rename bvals
+        shutil.copy(bval_in_file, bval_out_file)
+        self._results["bval_file"] = bval_out_file
 
         return runtime
+
+
 ####################################
 
 

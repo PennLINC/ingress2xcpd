@@ -10,6 +10,7 @@ from nipype import (
     Workflow,
 )
 
+import ingress2qsirecon
 from ingress2qsirecon.cli.parser import _build_parser
 from ingress2qsirecon.utils.utils import (
     CollectParticipants,
@@ -18,7 +19,7 @@ from ingress2qsirecon.utils.utils import (
 
 
 @beartype
-def ingress2qsirecon(**kwargs):
+def _ingress2qsirecon(**kwargs):
     # Get the command line arguments
     input_dir = Path(kwargs["input_dir"])
     output_dir = Path(kwargs["output_dir"])
@@ -45,8 +46,8 @@ def ingress2qsirecon(**kwargs):
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
     # Move BIDS scaffold files there
-    #ingress2reccon_dir = Path(__file__).parent
-    #shutil.copytree(input_dir, output_dir / "scaffold")
+    ingress2recon_dir = os.path.dirname(ingress2qsirecon.__file__)
+    shutil.copytree(os.path.join(ingress2recon_dir, "data", "bids_scaffold"), output_dir, dirs_exist_ok=True)
 
     # If participant_label not defined, make it empty list
     if participant_label is None:
@@ -62,18 +63,14 @@ def ingress2qsirecon(**kwargs):
     create_layout_node.inputs.input_pipeline = input_pipeline
     create_layout_node.inputs.participant_label = participant_label
 
+    # Conform DWI node
+
+    # DWIREF-making node
+
+    # FNIRT-to-IRK node
+
     workflow.add_nodes([create_layout_node])
     workflow.run()
-
-    # collect_participants_node = Node(CollectParticipants(), name="collect_participants")
-    # collect_participants_node.inputs.participant_label = participant_label
-
-    # workflow.add_nodes([create_layout_node, collect_participants_node])
-    # workflow.connect(create_layout_node, "layout", collect_participants_node, "layout")
-    # workflow.run()
-
-    # participants_to_run = collect_participants_node.outputs.participants
-    # print(f"Participants to run: {participants_to_run}")
 
 
 def main():
@@ -85,7 +82,7 @@ def main():
     parser = _build_parser()
     args = parser.parse_args()
     args_dict = vars(args)
-    ingress2qsirecon(**args_dict)
+    _ingress2qsirecon(**args_dict)
 
 
 if __name__ == '__main__':
