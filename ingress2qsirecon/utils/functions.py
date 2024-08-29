@@ -21,6 +21,7 @@ PIPELINE_INFO = {
             "brain_mask": ["T1w", "brainmask_fs.nii.gz"],
             "subject2MNI": ["MNINonLinear", "xfms", "acpc_dc2standard.nii.gz"],
             "MNI2subject": ["MNINonLinear", "xfms", "standard2acpc_dc.nii.gz"],
+            "MNI_ref": ["MNINonLinear", "T1w_restore_brain.nii.gz"],
         },
         "MNI_TEMPLATE": "MNI152NLin6Asym",
         "DIR_PATTERN": re.compile("(\d+)"),
@@ -36,6 +37,7 @@ PIPELINE_INFO = {
             # TODO: Add UKB XFM path
             # "subject2MNI": ["MNINonLinear", "xfms", "acpc_dc2standard.nii.gz"], # Note this is MNI152NLin6Asym
             # "MNI2subject": ["MNINonLinear", "xfms", "standard2acpc_dc.nii.gz"], # Note this is MNI152NLin6Asym
+            # "MNI_ref": ["T1", "T1_unbiased_brain.nii.gz"],
         },
         "MNI_TEMPLATE": "MNI152NLin6Asym",
         "DIR_PATTERN": re.compile("(\d+)_(\d+)_(\d+)"),

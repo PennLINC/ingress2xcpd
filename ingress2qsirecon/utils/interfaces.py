@@ -8,18 +8,18 @@ from textwrap import indent
 import nibabel as nb
 import numpy as np
 import SimpleITK as sitk
+from nilearn import image as nim
 from nipype import logging
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     CommandLineInputSpec,
-    Directory,
     File,
+    InputMultiObject,
     SimpleInterface,
-    Str,
     TraitedSpec,
-    WBCommand,
     traits,
 )
+from nipype.interfaces.workbench.base import WBCommand
 
 LOGGER = logging.getLogger("nipype.interface")
 
@@ -204,7 +204,7 @@ class ConformDwi(SimpleInterface):
         bvec_out_file = self.inputs.bvec_out_file
         orientation = self.inputs.orientation
 
-        validator = ValidateImage(in_file=dwi_in_file, out_file=dwi_out_file)
+        validator = ValidateImage(in_file=dwi_in_file, out_file=dwi_out_file, out_report=os.getcwd() + "/report.txt")
         validated = validator.run()
         self._results["out_report"] = validated.outputs.out_report
         input_img = nb.load(validated.outputs.out_file)
@@ -221,7 +221,7 @@ class ConformDwi(SimpleInterface):
             transform_orientation = nb.orientations.ornt_transform(input_orientation, desired_orientation)
             reoriented_img = input_img.as_reoriented(transform_orientation)
             reoriented_img.to_filename(dwi_out_file)
-            self._results["dwi_file"] = dwi_out_file
+            self._results["dwi_out_file"] = dwi_out_file
 
             # Flip the bvecs
             if os.path.exists(bvec_in_file):
@@ -233,18 +233,20 @@ class ConformDwi(SimpleInterface):
                 for this_axnum, (axnum, flip) in enumerate(transform_orientation):
                     output_array[this_axnum] = bvec_array[int(axnum)] * flip
                 np.savetxt(bvec_out_file, output_array, fmt="%.8f ")
-                self._results["bvec_file"] = bvec_out_file
+                self._results["bvec_out_file"] = bvec_out_file
 
         else:
             LOGGER.info("Not applying reorientation to %s: already in %s", dwi_in_file, orientation)
-            self._results["dwi_file"] = dwi_out_file
+            self._results["dwi_out_file"] = dwi_out_file
             # Copy and rename bvecs
-            shutil.copy(bvec_in_file, bvec_out_file)
-            self._results["bvec_file"] = bvec_out_file
+            if not os.path.exists(bvec_out_file):
+                shutil.copy(bvec_in_file, bvec_out_file)
+            self._results["bvec_out_file"] = bvec_out_file
 
         # Copy and rename bvals
-        shutil.copy(bval_in_file, bval_out_file)
-        self._results["bval_file"] = bval_out_file
+        if not os.path.exists(bval_out_file):
+            shutil.copy(bval_in_file, bval_out_file)
+        self._results["bval_out_file"] = bval_out_file
 
         return runtime
 
@@ -286,6 +288,11 @@ class ConvertWarpfield(WBCommand):
     output_spec = _ConvertWarpfieldOutputSpec
     _cmd = "wb_command -convert-warpfield"
 
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs["itk_out_xfm"] = os.path.abspath(self.inputs.itk_out_xfm)
+        return outputs
+
 
 class _NIFTItoH5InputSpec(TraitedSpec):
     xfm_nifti_in = File(exists=True, mandatory=True, desc="ITK NIFTI xfm iput")
@@ -302,9 +309,46 @@ class NIFTItoH5(SimpleInterface):
     output_spec = _NIFTItoH5OutputSpec
 
     def _run_interface(self, runtime):
-        displacement_image = sitk.ReadImage(self.inputs.xfm_nii_in, sitk.sitkVectorFloat64, imageIO="NiftiImageIO")
+        displacement_image = sitk.ReadImage(self.inputs.xfm_nifti_in, sitk.sitkVectorFloat64, imageIO="NiftiImageIO")
         tx = sitk.DisplacementFieldTransform(displacement_image)
         sitk.WriteTransform(tx, self.inputs.xfm_h5_out)
         self._results["xfm_h5_out"] = self.inputs.xfm_h5_out
+
+        return runtime
+
+
+class _ExtractB0sInputSpec(BaseInterfaceInputSpec):
+    b0_indices = traits.List()
+    bval_file = File(exists=True)
+    b0_threshold = traits.Int(50, usedefault=True)
+    dwi_series = File(exists=True, mandatory=True)
+    b0_average = File(mandatory=True, genfile=True)
+
+
+class _ExtractB0sOutputSpec(TraitedSpec):
+    b0_average = File(exists=True)
+
+
+class ExtractB0s(SimpleInterface):
+    """Extract a b0 series and a mean b0 from a dwi series."""
+
+    input_spec = _ExtractB0sInputSpec
+    output_spec = _ExtractB0sOutputSpec
+
+    def _run_interface(self, runtime):
+        output_mean_fname = self.inputs.b0_average
+        bvals = np.loadtxt(self.inputs.bval_file)
+        indices = np.flatnonzero(bvals < self.inputs.b0_threshold)
+        if indices.size == 0:
+            raise ValueError("No b<%d images found" % self.inputs.b0_threshold)
+
+        new_data = nim.index_img(self.inputs.dwi_series, indices)
+        if new_data.ndim > 3:
+            mean_image = nim.math_img("img.mean(3)", img=new_data)
+            mean_image.to_filename(output_mean_fname)
+        else:
+            new_data.to_filename(output_mean_fname)
+
+        self._results["b0_average"] = output_mean_fname
 
         return runtime

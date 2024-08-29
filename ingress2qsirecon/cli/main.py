@@ -5,14 +5,16 @@ import shutil
 from pathlib import Path
 
 from beartype import beartype
-from nipype import (
-    Node,
-    Workflow,
-)
 
 import ingress2qsirecon
 from ingress2qsirecon.cli.parser import _build_parser
 from ingress2qsirecon.utils.functions import create_layout
+from ingress2qsirecon.utils.workflows import create_ingress2qsirecon_wf
+
+# from nipype import (
+#     Node,
+#     Workflow,
+# )
 
 
 @beartype
@@ -32,8 +34,8 @@ def _ingress2qsirecon(**kwargs):
         raise NotImplementedError("--check_gradients, --dry_run, and --symlink are not implemented yet.")
 
     # TMP REMOVE WORK_DIR
-    if work_dir.exists():
-        shutil.rmtree(work_dir, ignore_errors=True)
+    # if work_dir.exists():
+    #    shutil.rmtree(work_dir, ignore_errors=True)
     # if workdir doesn't exist, create it
     if not work_dir.exists():
         work_dir.mkdir(parents=True)
@@ -51,26 +53,16 @@ def _ingress2qsirecon(**kwargs):
     if participant_label is None:
         participant_label = []
 
-    # Make layout with all data to be ingressed
-    layout = create_layout(input_dir, output_dir, input_pipeline, participant_label)
+    # Make list of dictionaries with all information about the ingressions, one dict per subject
+    layouts = create_layout(input_dir, output_dir, input_pipeline, participant_label)
 
-    subjects_to_run = [item["subject"] for item in layout]
+    # Create and run overall workflow, which will be broken down to single subject workflows
+    ingress2qsirecon_wf = create_ingress2qsirecon_wf(layouts, base_dir=work_dir)
+    ingress2qsirecon_wf.run()
 
-    # Create overall workflow
-    workflow = Workflow(name="ingress2qsirecon_wf", base_dir=work_dir)
+    # DWIREF-making node DONE
 
-    # Create subject gathering nodes
-    # create_layout_node = Node(CreateLayout(), name="create_layout")
-    # create_layout_node.inputs.input_dir = input_dir
-    # create_layout_node.inputs.output_dir = output_dir
-    # create_layout_node.inputs.input_pipeline = input_pipeline
-    # create_layout_node.inputs.participant_label = participant_label
-
-    # Conform DWI node
-
-    # DWIREF-making node
-
-    # FNIRT-to-IRK node
+    # FNIRT-to-ITK node
 
     # Convert to other MNI node
 
