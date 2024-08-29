@@ -3,6 +3,10 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 
+"""
+Convenience functions and information for ingress2qsirecon
+"""
+
 import os
 import re
 from pathlib import Path

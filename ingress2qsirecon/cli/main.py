@@ -11,14 +11,14 @@ from ingress2qsirecon.cli.parser import _build_parser
 from ingress2qsirecon.utils.functions import create_layout
 from ingress2qsirecon.utils.workflows import create_ingress2qsirecon_wf
 
-# from nipype import (
-#     Node,
-#     Workflow,
-# )
-
 
 @beartype
 def _ingress2qsirecon(**kwargs):
+    """
+    The main function
+
+    This initializes the import directories, then creates and run the nipype workflow.
+    """
     # Get the command line arguments
     input_dir = Path(kwargs["input_dir"])
     output_dir = Path(kwargs["output_dir"])
@@ -33,10 +33,7 @@ def _ingress2qsirecon(**kwargs):
     if check_gradients or dry_run or symlink:
         raise NotImplementedError("--check_gradients, --dry_run, and --symlink are not implemented yet.")
 
-    # TMP REMOVE WORK_DIR
-    # if work_dir.exists():
-    #    shutil.rmtree(work_dir, ignore_errors=True)
-    # if workdir doesn't exist, create it
+    # Create working directory
     if not work_dir.exists():
         work_dir.mkdir(parents=True)
     os.chdir(work_dir)
@@ -44,7 +41,8 @@ def _ingress2qsirecon(**kwargs):
     # If output_dir doesn't exist, create it
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
-    # Move BIDS scaffold files there
+
+    # Move BIDS scaffold files to output directory
     ingress2recon_dir = os.path.dirname(ingress2qsirecon.__file__)
     if not os.path.exists(os.path.join(output_dir, "dataset_description.json")):
         shutil.copytree(os.path.join(ingress2recon_dir, "data", "bids_scaffold"), output_dir, dirs_exist_ok=True)
@@ -59,15 +57,6 @@ def _ingress2qsirecon(**kwargs):
     # Create and run overall workflow, which will be broken down to single subject workflows
     ingress2qsirecon_wf = create_ingress2qsirecon_wf(layouts, base_dir=work_dir)
     ingress2qsirecon_wf.run()
-
-    # DWIREF-making node DONE
-
-    # FNIRT-to-ITK node
-
-    # Convert to other MNI node
-
-    # workflow.add_nodes([create_layout_node])
-    # workflow.run()
 
 
 def main():

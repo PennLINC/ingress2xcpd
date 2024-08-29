@@ -1,5 +1,6 @@
 """
-N"""
+Nipype Interfaces for Ingress2Qsirecon
+"""
 
 import os
 import shutil

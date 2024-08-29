@@ -1,16 +1,12 @@
+"""
+Nipype Workflows for Ingress2Qsirecon
+"""
+
 import os
 import shutil
 from pathlib import Path
 
-from nipype.interfaces.utility import (
-    Function,
-    IdentityInterface,
-)
-from nipype.pipeline.engine import (
-    MapNode,
-    Node,
-    Workflow,
-)
+from nipype.pipeline.engine import Workflow
 
 from ingress2qsirecon.utils.interfaces import (
     ConformDwi,
@@ -21,15 +17,42 @@ from ingress2qsirecon.utils.interfaces import (
 
 
 def parse_layout(subject_layout):
-    # Return the dictionary's values, which will correspond to the dynamic output names of the node
+    # Return the dictionary's values, for dynamic parsing of node output names
     return tuple(subject_layout.values())
 
 
 def create_single_subject_wf(subject_layout):
+    """
+    Create a nipype workflow to ingest a single subject.
 
+    This function creates a nipype workflow that takes a dictionary of file paths and
+    metadata as input, and outputs a BIDS-formatted directory with the ingested data.
+
+    The workflow consists of the following nodes:
+
+    - ``parse_layout``: a node that takes the input dictionary and extracts the individual
+      file paths and metadata.
+    - ``conform_dwi``: a node that takes the extracted DWI file paths and metadata, and
+      saves them to the BIDS layout.
+    - ``create_dwiref``: a node that takes the extracted DWI file paths and metadata, and
+      creates a mean b0 image if it does not exist.
+    - ``convert_warpfield``: a node that takes the extracted FNIRT warp file paths and
+      metadata, and converts them to ITK format.
+    - ``nii_to_h5``: a node that takes the converted ITK warp file paths and metadata, and
+      saves them as ITK H5 files.
+
+    Parameters
+    ----------
+    subject_layout : dict
+        A dictionary of file paths and metadata for a single subject, from ``create_layout`` function.
+
+    Returns
+    -------
+    wf : nipype.Workflow
+        A nipype workflow that operates on a single subject.
+    """
     #### WHY DO I HAVE TO REIMPORT THIS STUFF??
     from nipype import (
-        MapNode,
         Node,
         Workflow,
     )
@@ -69,7 +92,7 @@ def create_single_subject_wf(subject_layout):
     parse_layout_node = Node(
         Function(
             input_names=['subject_layout'],
-            output_names=list(subject_layout.keys()),  # Set dynamic output names
+            output_names=list(subject_layout.keys()),  # Outputs all fields available in the layout
             function=parse_layout,
         ),
         name='parse_layout_node',
@@ -77,8 +100,6 @@ def create_single_subject_wf(subject_layout):
 
     # Create node to conform DWI and save to BIDS layout
     conform_dwi_node = Node(ConformDwi(), name='conform_dwi')
-
-    # Connect nodes
     wf.connect(
         [
             (input_node, parse_layout_node, [('subject_layout', 'subject_layout')]),
@@ -195,21 +216,5 @@ def create_ingress2qsirecon_wf(layouts, name="ingress2qsirecon_wf", base_dir=os.
     for subject_layout in layouts:
         single_subject_wf = create_single_subject_wf(subject_layout)
         wf.add_nodes([single_subject_wf])
-
-    # Define input node for the overall workflow
-    # input_node = Node(IdentityInterface(fields=['layouts']), name='input_node')
-
-    # Define the MapNode that will run the single subject workflow in parallel
-    # single_subject_wf = MapNode(
-    #     Function(input_names=['subject_layout'], output_names=['out'], function=create_single_subject_wf),
-    #     name='init_ingress2qsirecon_single_subject_wf',
-    #     iterfield=['subject_layout'],
-    #  )
-
-    # Connect the input node to the parallelized single subject workflows
-    # wf.connect([(input_node, single_subject_wf, [('layouts', 'subject_layout')])])
-
-    # Set the layout dictionary list as the input
-    # wf.inputs.input_node.layouts = layouts
 
     return wf
