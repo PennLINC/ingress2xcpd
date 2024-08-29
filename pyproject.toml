@@ -15,8 +15,12 @@ ingress2qsirecon = "ingress2qsirecon.cli.main:main"
 beartype = "^0.18.5"
 icontract = "^2.6.6"
 loguru = "^0.7.2"
+nibabel = "^5.2.1"
+nilearn = "^0.10.4"
+nipype = "^1.8.6"
 pydantic = "^2.8"
 python = "^3.10"
+SimpleITK = "^2.4.0"
 
 
 [tool.poetry.group.test.dependencies]
