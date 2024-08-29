@@ -213,6 +213,9 @@ def create_ingress2qsirecon_wf(layouts, name="ingress2qsirecon_wf", base_dir=os.
     """
     wf = Workflow(name=name, base_dir=base_dir)
 
+    subjects_to_run = [layout["subject"] for layout in layouts]
+    print(f"Subject(s) to run: {subjects_to_run}")
+
     for subject_layout in layouts:
         single_subject_wf = create_single_subject_wf(subject_layout)
         wf.add_nodes([single_subject_wf])

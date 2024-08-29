@@ -15,7 +15,6 @@ from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     CommandLineInputSpec,
     File,
-    InputMultiObject,
     SimpleInterface,
     TraitedSpec,
     traits,
