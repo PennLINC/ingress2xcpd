@@ -1,0 +1,19 @@
+{
+    "Name": "BIDS-ified Data for QSIRecon",
+    "BIDSVersion": "1.9.0",
+    "DatasetType": "derivative",
+    "License": "CC0",
+    "Authors": [
+      "PennLINC",
+      "Your Computer"
+    ],
+    "ReferencesAndLinks": [
+      "https://github.com/PennLINC/ingress2qsirecon"
+    ],
+    "GeneratedBy": [
+      {
+        "Name": "ingress2qsirecon",
+        "Version": "latest"
+        }
+    ]
+  }
