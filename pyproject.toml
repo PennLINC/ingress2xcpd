@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "Ingress2QSIRecon"
 version = "0.1.0"
-description = ""
+description = "Tool to ingress data from other pipelines for use in QSIRecon"
 authors = ["Steven Meisler <smeisler13@gmail.com>"]
 readme = "README.md"
 packages = [{include = "ingress2qsirecon"}]
@@ -21,6 +21,10 @@ nipype = "^1.8.6"
 pydantic = "^2.8"
 python = "^3.10"
 SimpleITK = "^2.4.0"
+
+[tool.poetry.urls]
+homepage = "https://github.com/PennLINC/ingress2qsirecon"
+repository = "https://github.com/PennLINC/ingress2qsirecon"
 
 
 [tool.poetry.group.test.dependencies]
