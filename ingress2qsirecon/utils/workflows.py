@@ -94,9 +94,7 @@ def create_single_subject_wf(subject_layout):
 
     # Create node to conform DWI and save to BIDS layout
     conform_dwi_node = Node(ConformDwi(), name='conform_dwi')
-    # Create nodes to conform anatomicals and save to BIDS layout
-    conform_t1w_node = Node(Conform(), name="conform_t1w")
-    conform_mask_node = Node(Conform(), name="conform_mask")
+
     # Connect nodes
     wf.connect(
         [
@@ -113,19 +111,29 @@ def create_single_subject_wf(subject_layout):
                     ("bids_bvecs", "bvec_out_file"),
                 ],
             ),
-            # Add the zooms here
+        ]
+    )
+
+    # Create nodes to conform anatomicals and save to BIDS layout
+    # Add the zooms here for them to work
+    if "t1w_brain" in subject_layout.keys():
+        conform_t1w_node = Node(Conform(), name="conform_t1w")
+        wf.connect(
             (
                 parse_layout_node,
                 conform_t1w_node,
                 [("t1w_brain", "in_file"), ("bids_t1w_brain", "out_file")],
-            ),
+            )
+        )
+    if "brain_mask" in subject_layout.keys():
+        conform_mask_node = Node(Conform(), name="conform_mask")
+        wf.connect(
             (
                 parse_layout_node,
                 conform_mask_node,
                 [("brain_mask", "in_file"), ("bids_brain_mask", "out_file")],
             ),
-        ]
-    )
+        )
 
     # Write out .b and .bmtxt (DIPY standard)
 
