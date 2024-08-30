@@ -73,7 +73,7 @@ def create_single_subject_wf(subject_layout):
         os.makedirs(Path(bids_base / "anat").resolve())
         os.makedirs(Path(bids_base / "dwi").resolve())
 
-    # Some files, like anatomicals, can just be copied over to the output BIDS directory
+    # Some files, like anatomicals, can just be copied over to the output BIDS directory LPS+ THESE FILES (ConformImage)
     for key in ["t1w_brain", "brain_mask"]:
         bids_key = "bids_" + key
         if key in subject_layout.keys():
@@ -117,6 +117,9 @@ def create_single_subject_wf(subject_layout):
             ),
         ]
     )
+    # Write out .b and .bmtxt (DIPY standard)
+
+    # LPS+ anatomicals
 
     # If subject does not have DWIREF, run node to extract mean b0
     if "dwiref" not in subject_layout.keys():
