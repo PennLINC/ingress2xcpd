@@ -12,6 +12,8 @@ import re
 from pathlib import Path
 from warnings import warn
 
+import nibabel as nb
+
 # Files: file paths relative to subject input folder
 # MNI: MNI template version
 # DIR_PATTERN: regex pattern for subject ID within input folder
@@ -228,3 +230,19 @@ def create_layout(input_dir: Path, output_dir: Path, input_pipeline: str, partic
         raise ValueError("No subjects found in layout.")
 
     return layout
+
+
+def to_lps(input_img, new_axcodes=("L", "P", "S")):
+    if isinstance(input_img, str):
+        input_img = nb.load(input_img)
+    input_axcodes = nb.aff2axcodes(input_img.affine)
+    # Is the input image oriented how we want?
+    if not input_axcodes == new_axcodes:
+        # Re-orient
+        input_orientation = nb.orientations.axcodes2ornt(input_axcodes)
+        desired_orientation = nb.orientations.axcodes2ornt(new_axcodes)
+        transform_orientation = nb.orientations.ornt_transform(input_orientation, desired_orientation)
+        reoriented_img = input_img.as_reoriented(transform_orientation)
+        return reoriented_img
+    else:
+        return input_img

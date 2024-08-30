@@ -21,6 +21,8 @@ from nipype.interfaces.base import (
 )
 from nipype.interfaces.workbench.base import WBCommand
 
+from ingress2qsirecon.utils.functions import to_lps
+
 LOGGER = logging.getLogger("nipype.interface")
 
 
@@ -350,5 +352,115 @@ class ExtractB0s(SimpleInterface):
             new_data.to_filename(output_mean_fname)
 
         self._results["b0_average"] = output_mean_fname
+
+        return runtime
+
+
+class _ConformInputSpec(BaseInterfaceInputSpec):
+    in_file = File(mandatory=True, desc="Input image")
+    out_file = File(mandatory=True, genfile=True, desc="Conformed image")
+    target_zooms = traits.Tuple(traits.Float, traits.Float, traits.Float, desc="Target zoom information")
+    target_shape = traits.Tuple(traits.Int, traits.Int, traits.Int, desc="Target shape information")
+    deoblique_header = traits.Bool(False, usedfault=True)
+
+
+class _ConformOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc="Conformed image")
+    # transform = File(exists=True, desc="Conformation transform")
+    # report = File(exists=True, desc='reportlet about orientation')
+
+
+class Conform(SimpleInterface):
+    """Conform a series of T1w images to enable merging.
+
+    Performs two basic functions:
+
+    1. Orient to LPS (right-left, anterior-posterior, inferior-superior)
+    2. Resample to target zooms (voxel sizes) and shape (number of voxels)
+
+    """
+
+    input_spec = _ConformInputSpec
+    output_spec = _ConformOutputSpec
+
+    def _run_interface(self, runtime):
+        # Load image, orient as LPS
+        fname = self.inputs.in_file
+        orig_img = nb.load(fname)
+        reoriented = to_lps(orig_img)
+
+        # Set target shape information
+        target_zooms = np.array(self.inputs.target_zooms)
+        target_shape = np.array(self.inputs.target_shape)
+        target_span = target_shape * target_zooms
+
+        zooms = np.array(reoriented.header.get_zooms()[:3])
+        shape = np.array(reoriented.shape[:3])
+
+        # Reconstruct transform from orig to reoriented image
+        ornt_xfm = nb.orientations.inv_ornt_aff(nb.io_orientation(reoriented.affine), orig_img.shape)
+        # Identity unless proven otherwise
+        target_affine = reoriented.affine.copy()
+        conform_xfm = np.eye(4)
+        # conform_xfm = np.diag([-1, -1, 1, 1])
+
+        xyz_unit = reoriented.header.get_xyzt_units()[0]
+        if xyz_unit == "unknown":
+            # Common assumption; if we're wrong, unlikely to be the only thing that breaks
+            xyz_unit = "mm"
+
+        # Set a 0.05mm threshold to performing rescaling
+        atol = {"meter": 1e-5, "mm": 0.01, "micron": 10}[xyz_unit]
+
+        # Rescale => change zooms
+        # Resize => update image dimensions
+        rescale = not np.allclose(zooms, target_zooms, atol=atol)
+        resize = not np.all(shape == target_shape)
+        if rescale or resize:
+            if rescale:
+                scale_factor = target_zooms / zooms
+                target_affine[:3, :3] = reoriented.affine[:3, :3].dot(np.diag(scale_factor))
+
+            if resize:
+                # The shift is applied after scaling.
+                # Use a proportional shift to maintain relative position in dataset
+                size_factor = target_span / (zooms * shape)
+                # Use integer shifts to avoid unnecessary interpolation
+                offset = reoriented.affine[:3, 3] * size_factor - reoriented.affine[:3, 3]
+                target_affine[:3, 3] = reoriented.affine[:3, 3] + offset.astype(int)
+
+            data = nim.resample_img(reoriented, target_affine, target_shape).get_fdata()
+            conform_xfm = np.linalg.inv(reoriented.affine).dot(target_affine)
+            reoriented = reoriented.__class__(data, target_affine, reoriented.header)
+
+        if self.inputs.deoblique_header:
+            is_oblique = np.any(np.abs(nb.affines.obliquity(reoriented.affine)) > 0)
+            if is_oblique:
+                LOGGER.warning("Removing obliquity from image affine")
+                new_affine = reoriented.affine.copy()
+                new_affine[:, :-1] = 0
+                new_affine[(0, 1, 2), (0, 1, 2)] = reoriented.header.get_zooms()[:3] * np.sign(
+                    reoriented.affine[(0, 1, 2), (0, 1, 2)]
+                )
+                reoriented = nb.Nifti1Image(reoriented.get_fdata(), new_affine, reoriented.header)
+
+        # Save image
+        out_name = self.inputs.out_file
+        reoriented.to_filename(out_name)
+
+        # Image may be reoriented, rescaled, and/or resized
+        if reoriented is not orig_img:
+
+            transform = ornt_xfm.dot(conform_xfm)
+            if not np.allclose(orig_img.affine.dot(transform), target_affine):
+                LOGGER.warning("Check alignment of anatomical image.")
+
+        else:
+            transform = np.eye(4)
+
+        # mat_name = fname_presuffix(fname, suffix=".mat", newpath=runtime.cwd, use_ext=False)
+        # np.savetxt(mat_name, transform, fmt="%.08f")
+        # self._results["transform"] = mat_name
+        self._results["out_file"] = out_name
 
         return runtime

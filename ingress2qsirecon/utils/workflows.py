@@ -9,6 +9,7 @@ from pathlib import Path
 from nipype.pipeline.engine import Workflow
 
 from ingress2qsirecon.utils.interfaces import (
+    Conform,
     ConformDwi,
     ConvertWarpfield,
     ExtractB0s,
@@ -73,13 +74,6 @@ def create_single_subject_wf(subject_layout):
         os.makedirs(Path(bids_base / "anat").resolve())
         os.makedirs(Path(bids_base / "dwi").resolve())
 
-    # Some files, like anatomicals, can just be copied over to the output BIDS directory LPS+ THESE FILES (ConformImage)
-    for key in ["t1w_brain", "brain_mask"]:
-        bids_key = "bids_" + key
-        if key in subject_layout.keys():
-            if not os.path.exists(subject_layout[bids_key]):
-                shutil.copyfile(subject_layout[key], subject_layout[bids_key])
-
     # Create single subject workflow
     wf_name = f"ingress2qsirecon_single_subject_{subject_name}_wf"
     wf = Workflow(name=wf_name)
@@ -100,6 +94,10 @@ def create_single_subject_wf(subject_layout):
 
     # Create node to conform DWI and save to BIDS layout
     conform_dwi_node = Node(ConformDwi(), name='conform_dwi')
+    # Create nodes to conform anatomicals and save to BIDS layout
+    conform_t1w_node = Node(Conform(), name="conform_t1w")
+    conform_mask_node = Node(Conform(), name="conform_mask")
+    # Connect nodes
     wf.connect(
         [
             (input_node, parse_layout_node, [('subject_layout', 'subject_layout')]),
@@ -115,11 +113,21 @@ def create_single_subject_wf(subject_layout):
                     ("bids_bvecs", "bvec_out_file"),
                 ],
             ),
+            # Add the zooms here
+            (
+                parse_layout_node,
+                conform_t1w_node,
+                [("t1w_brain", "in_file"), ("bids_t1w_brain", "out_file")],
+            ),
+            (
+                parse_layout_node,
+                conform_mask_node,
+                [("brain_mask", "in_file"), ("bids_brain_mask", "out_file")],
+            ),
         ]
     )
-    # Write out .b and .bmtxt (DIPY standard)
 
-    # LPS+ anatomicals
+    # Write out .b and .bmtxt (DIPY standard)
 
     # If subject does not have DWIREF, run node to extract mean b0
     if "dwiref" not in subject_layout.keys():
