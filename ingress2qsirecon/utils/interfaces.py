@@ -12,9 +12,11 @@ import SimpleITK as sitk
 from nilearn import image as nim
 from nipype import logging
 from nipype.interfaces.base import (
+    BaseInterface,
     BaseInterfaceInputSpec,
     CommandLineInputSpec,
     File,
+    InputMultiPath,
     SimpleInterface,
     TraitedSpec,
     traits,
@@ -464,3 +466,37 @@ class Conform(SimpleInterface):
         self._results["out_file"] = out_name
 
         return runtime
+
+# Define the input specification
+class _ComposeTransformsInputSpec(BaseInterfaceInputSpec):
+    warp_files = InputMultiPath(File(exists=True), desc="List of warp files in .h5 format", mandatory=True)
+    output_warp = File(mandatory=True, genfile=True, desc="Output composed warp file")
+
+# Define the output specification
+class _ComposeTransformsOutputSpec(TraitedSpec):
+    output_warp = File(exists=True, desc="Output composed warp file")
+
+# Define the custom Nipype interface
+class ComposeTransforms(BaseInterface):
+    input_spec = _ComposeTransformsInputSpec
+    output_spec = _ComposeTransformsOutputSpec
+
+    def _run_interface(self, runtime):
+        # Create a CompositeTransform object
+        composite_transform = sitk.CompositeTransform(3)
+
+        # Iterate over the list of warp files and add them to the composite transform
+        for warp_file in self.inputs.warp_files:
+            transform = sitk.ReadTransform(warp_file)
+            composite_transform.AddTransform(transform)
+
+        # Write the composite transform to the output file
+        output_path = os.path.abspath(self.inputs.output_warp)
+        sitk.WriteTransform(composite_transform, output_path)
+
+        return runtime
+
+    def _list_outputs(self):
+        outputs = self._outputs().get()
+        outputs["output_warp"] = os.path.abspath(self.inputs.output_warp)
+        return outputs

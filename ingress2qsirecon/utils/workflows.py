@@ -7,8 +7,10 @@ import shutil
 from pathlib import Path
 
 from nipype.pipeline.engine import Workflow
+from templateflow import api as tflow
 
 from ingress2qsirecon.utils.interfaces import (
+    ComposeTransforms,
     Conform,
     ConformDwi,
     ConvertWarpfield,
@@ -177,6 +179,7 @@ def create_single_subject_wf(subject_layout):
                 ),
             ]
         )
+        if subject_layout["MNI_"]
 
     # Then MNI2Subject
     if "MNI2subject" in subject_layout.keys():
