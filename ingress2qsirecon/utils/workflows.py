@@ -152,7 +152,7 @@ def create_single_subject_wf(subject_layout):
             ]
         )
 
-    # Convert FNIRT nii warps to ITK nii, then ITK nii to ITK H5, then get to MNI2009cAsym space if needed
+    # Convert FNIRT nii warps to ITK nii, then ITK nii to ITK H5
     # Start with subject2MNI
     if "subject2MNI" in subject_layout.keys():
         convert_warpfield_node_subject2MNI = Node(ConvertWarpfield(), name="convert_warpfield_subject2MNI")
@@ -179,7 +179,6 @@ def create_single_subject_wf(subject_layout):
                 ),
             ]
         )
-        if subject_layout["MNI_"]
 
     # Then MNI2Subject
     if "MNI2subject" in subject_layout.keys():
@@ -208,6 +207,29 @@ def create_single_subject_wf(subject_layout):
             ]
         )
 
+    # Now get transform to MNI2009cAsym
+    if (
+        subject_layout["MNI_TEMPLATE"] == "MNI152NLin6Asym"
+    ):  # tpl-MNI152NLin6Asym_from-MNI152NLin2009cAsym_mode-image_xfm.h5
+        MNI2009cAsym_to_MNINLin6 = tflow.get('MNI152NLin6Asym', desc=None, suffix='xfm', extension='h5')
+        MNINLin6_to_MNI2009cAsym = tflow.get('MNI152NLin2009cAsym', desc=None, suffix='xfm', extension='h5')
+        compose_transforms_node_MNI2subject = Node(ComposeTransforms(), name="compose_transforms_MNI2subject")
+        compose_transforms_node_MNI2subject.inputs.transforms = [
+            nii_to_h5_node_subject2MNI.outputs.xfm_h5_out,
+            MNINLin6_to_MNI2009cAsym,
+        ]
+        compose_transforms_node_MNI2subject.inputs.output_warp = str(subject_layout["bids_MNI2subject"]).replace(
+            subject_layout["MNI_TEMPLATE"], "NI152NLin2009cAsym"
+        )
+        compose_transforms_node_subject2MNI = Node(ComposeTransforms(), name="compose_transforms_subject2MNI")
+        compose_transforms_node_subject2MNI.inputs.transforms = [
+            nii_to_h5_node_MNI2subject.outputs.xfm_h5_out,
+            MNINLin6_to_MNI2009cAsym,
+        ]
+        compose_transforms_node_subject2MNI.inputs.output_warp = str(subject_layout["bids_subject2MNI"]).replace(
+            subject_layout["MNI_TEMPLATE"], "NI152NLin2009cAsym"
+        )
+        
     return wf
 
 

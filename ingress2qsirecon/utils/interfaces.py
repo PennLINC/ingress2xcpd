@@ -467,14 +467,17 @@ class Conform(SimpleInterface):
 
         return runtime
 
+
 # Define the input specification
 class _ComposeTransformsInputSpec(BaseInterfaceInputSpec):
     warp_files = InputMultiPath(File(exists=True), desc="List of warp files in .h5 format", mandatory=True)
     output_warp = File(mandatory=True, genfile=True, desc="Output composed warp file")
 
+
 # Define the output specification
 class _ComposeTransformsOutputSpec(TraitedSpec):
     output_warp = File(exists=True, desc="Output composed warp file")
+
 
 # Define the custom Nipype interface
 class ComposeTransforms(BaseInterface):
