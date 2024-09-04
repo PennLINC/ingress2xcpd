@@ -4,8 +4,10 @@ Nipype Interfaces for Ingress2Qsirecon
 
 import os
 import shutil
+import tempfile
 from textwrap import indent
 
+import itk
 import nibabel as nb
 import numpy as np
 import SimpleITK as sitk
@@ -479,8 +481,30 @@ class _ComposeTransformsOutputSpec(TraitedSpec):
     output_warp = File(exists=True, desc="Output composed warp file")
 
 
+class ComposeTransforms2(BaseInterface):
+
+    input_spec = _ComposeTransformsInputSpec
+    output_spec = _ComposeTransformsOutputSpec
+
+    def _run_interface(self, runtime):
+        # Create a CompositeTransform object
+
+        # Iterate over the list of warp files and add them to the composite transform
+        output_warp = os.path.abspath(self.inputs.output_warp)
+        transforms = [itk.transformread(warp_file) for warp_file in self.inputs.warp_files]
+        itk.transformwrite(transforms, output_warp)
+
+        return runtime
+
+    def _list_outputs(self):
+        outputs = self._outputs().get()
+        outputs["output_warp"] = os.path.abspath(self.inputs.output_warp)
+        return outputs
+
+
 # Define the custom Nipype interface
 class ComposeTransforms(BaseInterface):
+
     input_spec = _ComposeTransformsInputSpec
     output_spec = _ComposeTransformsOutputSpec
 
@@ -491,11 +515,16 @@ class ComposeTransforms(BaseInterface):
         # Iterate over the list of warp files and add them to the composite transform
         for warp_file in self.inputs.warp_files:
             transform = sitk.ReadTransform(warp_file)
-            composite_transform.AddTransform(transform)
+            try:
+                # If composite, add each transform in the list
+                for i in range(transform.GetNumberOfTransforms()):
+                    composite_transform.AddTransform(transform.GetNthTransform(i))
+            except:
+                # If not, just add the transform
+                composite_transform.AddTransform(transform)
 
-        # Write the composite transform to the output file
-        output_path = os.path.abspath(self.inputs.output_warp)
-        sitk.WriteTransform(composite_transform, output_path)
+        # Write the composite transform to the temporary file
+        sitk.WriteTransform(composite_transform, self.inputs.output_warp)
 
         return runtime
 
