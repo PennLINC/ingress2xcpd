@@ -16,6 +16,8 @@ from ingress2qsirecon.utils.interfaces import (
     ConformDwi,
     ConvertWarpfield,
     ExtractB0s,
+    FSLBVecsToTORTOISEBmatrix,
+    MRTrixGradientTable,
     NIFTItoH5,
 )
 
@@ -100,7 +102,9 @@ def create_single_subject_wf(subject_layout):
 
     # Create node to conform DWI and save to BIDS layout
     conform_dwi_node = Node(ConformDwi(), name='conform_dwi')
-
+    # Create node to make b-matrix and bfile from FSL bval/bvec
+    create_bmatrix_node = Node(FSLBVecsToTORTOISEBmatrix(), name="create_bmatrix")
+    create_bfile_node = Node(MRTrixGradientTable(), name="create_bfile")
     # Connect nodes
     wf.connect(
         [
@@ -117,6 +121,24 @@ def create_single_subject_wf(subject_layout):
                     ("bids_bvecs", "bvec_out_file"),
                 ],
             ),
+            (
+                conform_dwi_node,
+                create_bmatrix_node,
+                [
+                    ("bval_out_file", "bvals_file"),
+                    ("bvec_out_file", "bvecs_file"),
+                ],
+            ),
+            (parse_layout_node, create_bmatrix_node, [("bids_bmtxt", "bmtxt_file")]),
+            (
+                conform_dwi_node,
+                create_bfile_node,
+                [
+                    ("bval_out_file", "bval_file"),
+                    ("bvec_out_file", "bvec_file"),
+                ],
+            ),
+            (parse_layout_node, create_bfile_node, [("bids_b", "b_file_out")]),
         ]
     )
 
@@ -160,8 +182,6 @@ def create_single_subject_wf(subject_layout):
                     ),
                 ]
             )
-
-    # Write out .b and .bmtxt (DIPY standard)
 
     # If subject does not have DWIREF, run node to extract mean b0
     if "dwiref" not in subject_layout.keys():

@@ -111,6 +111,7 @@ def make_bids_file_paths(subject_layout: dict) -> dict:
     bids_bval_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.bval")
     bids_bvec_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.bvec")
     bids_b_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.b")
+    bids_bmtxt_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.bmtxt")
     bids_dwiref_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwiref.nii.gz")
 
     bids_file_paths = {
@@ -118,6 +119,7 @@ def make_bids_file_paths(subject_layout: dict) -> dict:
         "bids_bvals": Path(bids_bval_file),
         "bids_bvecs": Path(bids_bvec_file),
         "bids_b": Path(bids_b_file),
+        "bids_bmtxt": Path(bids_bmtxt_file),
         "bids_dwiref": Path(bids_dwiref_file),
     }
 

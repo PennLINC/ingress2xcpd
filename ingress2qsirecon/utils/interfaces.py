@@ -481,27 +481,6 @@ class _ComposeTransformsOutputSpec(TraitedSpec):
     output_warp = File(exists=True, desc="Output composed warp file")
 
 
-class ComposeTransforms2(BaseInterface):
-
-    input_spec = _ComposeTransformsInputSpec
-    output_spec = _ComposeTransformsOutputSpec
-
-    def _run_interface(self, runtime):
-        # Create a CompositeTransform object
-
-        # Iterate over the list of warp files and add them to the composite transform
-        output_warp = os.path.abspath(self.inputs.output_warp)
-        transforms = [itk.transformread(warp_file) for warp_file in self.inputs.warp_files]
-        itk.transformwrite(transforms, output_warp)
-
-        return runtime
-
-    def _list_outputs(self):
-        outputs = self._outputs().get()
-        outputs["output_warp"] = os.path.abspath(self.inputs.output_warp)
-        return outputs
-
-
 # Define the custom Nipype interface
 class ComposeTransforms(BaseInterface):
 
@@ -532,3 +511,101 @@ class ComposeTransforms(BaseInterface):
         outputs = self._outputs().get()
         outputs["output_warp"] = os.path.abspath(self.inputs.output_warp)
         return outputs
+
+
+class _FSLBVecsToTORTOISEBmatrixInputSpec(BaseInterfaceInputSpec):
+    bvals_file = File(exists=True, desc='Full path to bvals file', mandatory=True)
+    bvecs_file = File(exists=True, desc='Full path to bvecs file', mandatory=True)
+    bmtxt_file = File(mandatory=True, desc='Output B-matrix file', genfile=True)
+
+
+class _FSLBVecsToTORTOISEBmatrixOutputSpec(TraitedSpec):
+    bmtxt_file = File(exists=True, genfile=True, desc='Output B-matrix file')
+
+
+class FSLBVecsToTORTOISEBmatrix(BaseInterface):
+    input_spec = _FSLBVecsToTORTOISEBmatrixInputSpec
+    output_spec = _FSLBVecsToTORTOISEBmatrixOutputSpec
+
+    def _run_interface(self, runtime):
+        bvals_file = self.inputs.bvals_file
+        bvecs_file = self.inputs.bvecs_file
+
+        # Load bvals and bvecs
+        try:
+            bvals = np.loadtxt(bvals_file)
+        except OSError:
+            raise RuntimeError(f"Bvals file does not exist: {bvals_file}")
+
+        try:
+            bvecs = np.loadtxt(bvecs_file)
+        except OSError:
+            raise RuntimeError(f"Bvecs file does not exist: {bvecs_file}")
+
+        # Ensure bvecs has 3 rows and bvals has 1 row
+        if bvecs.shape[0] != 3:
+            bvecs = bvecs.T
+        if bvals.shape[0] != 1:
+            bvals = bvals.reshape(1, -1)
+
+        Nvols = bvecs.shape[1]
+        Bmatrix = np.zeros((Nvols, 6))
+
+        for i in range(Nvols):
+            vec = bvecs[:, i].reshape(3, 1)
+            nrm = np.linalg.norm(vec)
+            if nrm > 1e-3:
+                vec /= nrm
+
+            mat = bvals[0, i] * np.dot(vec, vec.T)
+            Bmatrix[i, 0] = mat[0, 0]
+            Bmatrix[i, 1] = 2 * mat[0, 1]
+            Bmatrix[i, 2] = 2 * mat[0, 2]
+            Bmatrix[i, 3] = mat[1, 1]
+            Bmatrix[i, 4] = 2 * mat[1, 2]
+            Bmatrix[i, 5] = mat[2, 2]
+
+        dirname = os.path.dirname(bvals_file)
+        if dirname == "":
+            dirname = "."
+
+        np.savetxt(self.inputs.bmtxt_file, Bmatrix)
+
+        return runtime
+
+    def _list_outputs(self):
+        outputs = self._outputs().get()
+        outputs['bmtxt_file'] = self.inputs.bmtxt_file
+        return outputs
+
+
+class _MRTrixGradientTableInputSpec(BaseInterfaceInputSpec):
+    bval_file = File(exists=True, mandatory=True)
+    bvec_file = File(exists=True, mandatory=True)
+    b_file_out = File(genfile=True, mandatory=True)
+
+
+class _MRTrixGradientTableOutputSpec(TraitedSpec):
+    b_file_out = File(exists=True)
+
+
+class MRTrixGradientTable(BaseInterface):
+    input_spec = _MRTrixGradientTableInputSpec
+    output_spec = _MRTrixGradientTableOutputSpec
+
+    def _run_interface(self, runtime):
+        _convert_fsl_to_mrtrix(self.inputs.bval_file, self.inputs.bvec_file, self.inputs.b_file_out)
+        return runtime
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        # Return the output filename which Nipype generates
+        outputs['b_file_out'] = self.inputs.b_file_out
+        return outputs
+
+
+def _convert_fsl_to_mrtrix(bval_file, bvec_file, output_fname):
+    vecs = np.loadtxt(bvec_file)
+    vals = np.loadtxt(bval_file)
+    gtab = np.column_stack([vecs.T, vals]) * np.array([-1, -1, 1, 1])
+    np.savetxt(output_fname, gtab, fmt=["%.8f", "%.8f", "%.8f", "%d"])
