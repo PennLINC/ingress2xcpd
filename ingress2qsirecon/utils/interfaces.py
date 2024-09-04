@@ -3,11 +3,10 @@ Nipype Interfaces for Ingress2Qsirecon
 """
 
 import os
+import pandas as pd
 import shutil
-import tempfile
 from textwrap import indent
 
-import itk
 import nibabel as nb
 import numpy as np
 import SimpleITK as sitk
@@ -609,3 +608,38 @@ def _convert_fsl_to_mrtrix(bval_file, bvec_file, output_fname):
     vals = np.loadtxt(bval_file)
     gtab = np.column_stack([vecs.T, vals]) * np.array([-1, -1, 1, 1])
     np.savetxt(output_fname, gtab, fmt=["%.8f", "%.8f", "%.8f", "%d"])
+
+class _ScansTSVWriterInputSpec(BaseInterfaceInputSpec):
+    filenames = traits.List(traits.Str, mandatory=True, desc="List of filenames")
+    source_files = traits.List(traits.Str, mandatory=True, desc="List of source files")
+    out_file = File("output.tsv", usedefault=True, desc="Output TSV file")
+
+class _ScansTSVWriterOutputSpec(TraitedSpec):
+    out_file = File(desc="Output TSV file")
+
+class ScansTSVWriter(BaseInterface):
+    input_spec = _ScansTSVWriterInputSpec
+    output_spec = _ScansTSVWriterOutputSpec
+
+    def _run_interface(self, runtime):
+        filenames = self.inputs.filenames
+        source_files = self.inputs.source_files
+
+        # Check if lengths match
+        if len(filenames) != len(source_files):
+            raise ValueError("filenames and source_files must have the same length")
+
+        # Create DataFrame
+        df = pd.DataFrame({
+            "filename": filenames,
+            "source_file": source_files
+        })
+
+        # Write to TSV
+        df.to_csv(self.inputs.out_file, sep='\t', index=False)
+        return runtime
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get().copy()
+        outputs['out_file'] = self.inputs.out_file
+        return outputs

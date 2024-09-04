@@ -3,7 +3,6 @@ Nipype Workflows for Ingress2Qsirecon
 """
 
 import os
-import shutil
 from pathlib import Path
 
 from nipype.pipeline.engine import Workflow
