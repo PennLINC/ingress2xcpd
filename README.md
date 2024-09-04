@@ -2,45 +2,25 @@
 A tool for ingressing outputs from other processing pipelines (e.g., HCP, UKB) for use in QSIRecon.
 
 ## Overview
-Your description here
+This tool can be used to import data from bespoke and widely-used DWI preprocessing pipelines (e.g., Human Connectome Project and UK Biobank) into QSIRecon for post-processing.
+
+## Installation
+This project can be installed via PyPi. In your virtual environment run
+```
+pip install Ingress2QSIRecon
+```
+For the master/development branch, you can clone the github repo, and run from within it:
+```
+pip install -e .
+```
 
 ## Usage
-This project is set up using poetry. To install the dependencies, run `poetry install` from the root of the project.
-
-```shell
-poetry install
+Assuming you have the data to ingress locally availble, you can run the following:
 ```
-
-To add a new dependency, run `poetry add <dependency>` from the root of the project.
-
-```shell
-poetry add <dependency>
+ingress2qsirecon \
+    /PATH/TO/INPUT/DATA \ # E.g., path to HCP1200 directory
+    /PATH/TO/OUTPUT \ # BIDS directory with ingressed data will be made here
+    PIPELINE_NAME \ # Currently support "hcpya" and "ukb" \
+    -w /PATH/TO/WORKING/DIR \ # Where intermediate files and workflow information will be stored
+    --participant-label 100307 # Name(s) of folder within /PATH/TO/INPUT/DATA. If not specified, will process everyone
 ```
-
-### Pre-Commit Hooks
-This project uses [pre-commit](https://pre-commit.com/) to run linting and formatting tools before each commit. To install the pre-commit hooks, run `pre-commit install` from the root of the project.
-
-```shell
-poetry run pre-commit install
-```
-
-To run the pre-commit hooks manually, run `pre-commit run --all-files` from the root of the project.
-
-```shell
-poetry run pre-commit run --all-files
-```
-
-
-### Testing
-This project uses [pytest](https://docs.pytest.org/en/stable/) for testing. To run the tests, run `pytest` from the root of the project in the poetry shell.
-
-```shell
-poetry run pytest
-```
-
-There are sensible defaults for pytest setup in the `pyproject.toml` file. You can override these defaults by passing in command line arguments. For example, to run the tests with debug logging enabled, run `pytest --log-cli-level=DEBUG` from the root of the project.
-
-```shell
-poetry run pytest --log-cli-level=DEBUG
-```
-
