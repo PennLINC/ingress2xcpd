@@ -280,13 +280,6 @@ def create_single_subject_wf(subject_layout):
             ]
         )
 
-        # Then Subject --> MNI
-        # compose_transforms_node_subject2MNI = Node(ComposeTransforms(), name="compose_transforms_subject2MNI")
-        # compose_transforms_node_subject2MNI.inputs.warp_files = [MNINLin6_to_MNI2009cAsym, subject_layout["bids_subject2MNI"]]
-        # compose_transforms_node_subject2MNI.inputs.output_warp = str(subject_layout["bids_subject2MNI"]).replace(
-        #    MNI_template, "MNI152NLin2009cAsym"
-        # )
-
     return wf
 
 
