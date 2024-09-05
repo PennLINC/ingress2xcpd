@@ -107,12 +107,12 @@ def make_bids_file_paths(subject_layout: dict) -> dict:
     mni_template = str(subject_layout["MNI_template"])
 
     # BIDS-ify required files
-    bids_dwi_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.nii.gz")
-    bids_bval_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.bval")
-    bids_bvec_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.bvec")
-    bids_b_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.b")
-    bids_bmtxt_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwi.bmtxt")
-    bids_dwiref_file = os.path.join(bids_base, "dwi", sub_session_string + "_dwiref.nii.gz")
+    bids_dwi_file = os.path.join(bids_base, "dwi", sub_session_string + "_space-T1w_desc-preproc_dwi.nii.gz")
+    bids_bval_file = os.path.join(bids_base, "dwi", sub_session_string + "_space-T1w_desc-preproc_dwi.bval")
+    bids_bvec_file = os.path.join(bids_base, "dwi", sub_session_string + "_space-T1w_desc-preproc_dwi.bvec")
+    bids_b_file = os.path.join(bids_base, "dwi", sub_session_string + "_space-T1w_desc-preproc_dwi.b")
+    bids_bmtxt_file = os.path.join(bids_base, "dwi", sub_session_string + "_space-T1w_desc-preproc_dwi.bmtxt")
+    bids_dwiref_file = os.path.join(bids_base, "dwi", sub_session_string + "_space-T1w_dwiref.nii.gz")
 
     bids_file_paths = {
         "bids_dwi": Path(bids_dwi_file),
