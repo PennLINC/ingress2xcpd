@@ -30,7 +30,7 @@ PIPELINE_INFO = {
             "MNI_ref": ["MNINonLinear", "T1w_restore_brain.nii.gz"],
         },
         "MNI_TEMPLATE": "MNI152NLin6Asym",
-        "DIR_PATTERN": re.compile("(\d+)"),
+        "DIR_PATTERN": re.compile(r"(\d+)"),
     },
     "ukb": {
         "files": {
@@ -46,7 +46,7 @@ PIPELINE_INFO = {
             # "MNI_ref": ["T1", "T1_unbiased_brain.nii.gz"],
         },
         "MNI_TEMPLATE": "MNI152NLin6Asym",
-        "DIR_PATTERN": re.compile("(\d+)_(\d+)_(\d+)"),
+        "DIR_PATTERN": re.compile(r"(\d+)_(\d+)_(\d+)"),
     },
 }
 
