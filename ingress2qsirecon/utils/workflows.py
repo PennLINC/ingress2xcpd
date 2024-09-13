@@ -151,7 +151,7 @@ def create_single_subject_wf(subject_layout):
                 (
                     parse_layout_node,
                     template_dimensions_node,
-                    [("t1w_brain", "anat_list")],
+                    [("t1w_brain", "t1w_list")],
                 ),
                 (
                     template_dimensions_node,
