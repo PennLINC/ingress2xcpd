@@ -6,8 +6,8 @@ from pathlib import Path
 
 from beartype import beartype
 
-import ingress2qsirecon
 from ingress2qsirecon.cli.parser import _build_parser
+from ingress2qsirecon.data import load_resource
 from ingress2qsirecon.utils.functions import create_layout
 from ingress2qsirecon.utils.workflows import create_ingress2qsirecon_wf
 
@@ -43,9 +43,9 @@ def _ingress2qsirecon(**kwargs):
         output_dir.mkdir(parents=True)
 
     # Move BIDS scaffold files to output directory
-    ingress2recon_dir = os.path.dirname(ingress2qsirecon.__file__)
+    bids_scaffold = str(load_resource('bids_scaffold/'))
     if not os.path.exists(os.path.join(output_dir, "dataset_description.json")):
-        shutil.copytree(os.path.join(ingress2recon_dir, "data", "bids_scaffold"), output_dir, dirs_exist_ok=True)
+        shutil.copytree(bids_scaffold, output_dir, dirs_exist_ok=True)
 
     # If participant_label not defined, make it empty list
     if participant_label is None:
