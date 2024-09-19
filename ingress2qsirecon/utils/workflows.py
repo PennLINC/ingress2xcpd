@@ -10,7 +10,6 @@ from niworkflows.interfaces.images import TemplateDimensions
 from templateflow import api as tflow
 
 from ingress2qsirecon.utils.interfaces import (
-    ComposeTransforms,
     Conform,
     ConformDwi,
     ConvertWarpfield,
@@ -18,6 +17,7 @@ from ingress2qsirecon.utils.interfaces import (
     FSLBVecsToTORTOISEBmatrix,
     MRTrixGradientTable,
     NIFTItoH5,
+    RobustMNINormalizationRPT,
 )
 
 
@@ -26,7 +26,7 @@ def parse_layout(subject_layout):
     return tuple(subject_layout.values())
 
 
-def create_single_subject_wf(subject_layout):
+def create_single_subject_wf(subject_layout, skip_mni2009c_norm=False):
     """
     Create a nipype workflow to ingest a single subject.
 
@@ -84,7 +84,7 @@ def create_single_subject_wf(subject_layout):
 
     # Define input node for the single subject workflow
     input_node = Node(
-        IdentityInterface(fields=['subject_layout', "MNI2009cAsym_to_MNINLin6", "MNINLin6_to_MNI2009cAsym"]),
+        IdentityInterface(fields=['subject_layout']),
         name='input_node',
     )
     input_node.inputs.subject_layout = subject_layout
@@ -252,57 +252,88 @@ def create_single_subject_wf(subject_layout):
 
     # Now get transform to MNI2009cAsym
     MNI_template = subject_layout["MNI_template"]
-    if MNI_template == "MNI152NLin6Asym":
-        # Get the relevant transforms from templateflow
-        MNI2009cAsym_to_MNINLin6 = tflow.get('MNI152NLin6Asym', desc=None, suffix='xfm', extension='h5')
-        input_node.inputs.MNI2009cAsym_to_MNINLin6 = MNI2009cAsym_to_MNINLin6
-        MNINLin6_to_MNI2009cAsym = tflow.get('MNI152NLin2009cAsym', desc=None, suffix='xfm', extension='h5')
-        input_node.inputs.MNINLin6_to_MNI2009cAsym = MNINLin6_to_MNI2009cAsym
-
-        # Define a function to make a list of two warp files for input to ComposeTransforms
-        def combine_warp_files(file1, file2):
-            return [file1, file2]
-
-        # Create a Function node to make a list of warp files for MNI2subject
-        warp_files_list_MNI2subject = Node(
-            Function(input_names=['file1', 'file2'], output_names=['combined_files'], function=combine_warp_files),
-            name='list_warp_files_MNI2subject',
+    if MNI_template != "MNI152NLin2009cAsym" and skip_mni2009c_norm == False:
+        # Get MNI brain and mask
+        MNI2009cAsym_brain_path = str(
+            tflow.get('MNI152NLin2009cAsym', desc="brain", suffix="T1w", resolution=1, extension=".nii.gz")
         )
-
-        # Create a Function node to make a list of warp files for subject2MNI
-        warp_files_list_subject2MNI = Node(
-            Function(input_names=['file1', 'file2'], output_names=['combined_files'], function=combine_warp_files),
-            name='list_warp_files_subject2MNI',
+        MNI2009cAsym_mask_path = str(
+            tflow.get('MNI152NLin2009cAsym', desc="brain", suffix="mask", resolution=1, extension=".nii.gz")
         )
+        # Create transform node
+        anat_norm_interface = RobustMNINormalizationRPT(float=True, generate_report=True, flavor="precise")
+        anat_nlin_normalization = Node(anat_norm_interface, name="anat_nlin_normalization")
+        # Set inputs
+        anat_nlin_normalization.inputs.template = MNI2009cAsym_brain_path
+        anat_nlin_normalization.inputs.reference_image = MNI2009cAsym_brain_path
+        anat_nlin_normalization.inputs.reference_mask = MNI2009cAsym_mask_path
+        anat_nlin_normalization.inputs.orientation = "LPS"
 
-        # Make the compute nodes for combining transforms
-        compose_transforms_node_MNI2subject = Node(ComposeTransforms(), name="compose_transforms_MNI2subject")
-        compose_transforms_node_MNI2subject.inputs.output_warp = str(subject_layout["bids_MNI2subject"]).replace(
-            MNI_template, "MNI152NLin2009cAsym"
-        )
-        compose_transforms_node_subject2MNI = Node(ComposeTransforms(), name="compose_transforms_subject2MNI")
-        compose_transforms_node_subject2MNI.inputs.output_warp = str(subject_layout["bids_subject2MNI"]).replace(
-            MNI_template, "MNI152NLin2009cAsym"
-        )
+        # Create output node to save out relevant files
+        def save_xfm_outputs(
+            to_template_nonlinear_transform_in,
+            from_template_nonlinear_transform_in,
+            to_template_nonlinear_transform_out,
+            from_template_nonlinear_transform_out,
+        ):
+            import shutil
 
-        # Connect the nodes
+            # Dictionary of inputs to save
+            files = {
+                to_template_nonlinear_transform_out: to_template_nonlinear_transform_in,
+                from_template_nonlinear_transform_out: from_template_nonlinear_transform_in,
+            }
+
+            for filename, file_content in files.items():
+                # Copy or move files to the output directory
+                shutil.copy(file_content, filename)
+
+        save_outputs_node = Node(
+            Function(
+                input_names=[
+                    "to_template_nonlinear_transform_in",
+                    "from_template_nonlinear_transform_in",
+                    "to_template_nonlinear_transform_out",
+                    "from_template_nonlinear_transform_out",
+                ],
+                function=save_xfm_outputs,
+            ),
+            name="save_outputs_node",
+        )
+        save_outputs_node.inputs.to_template_nonlinear_transform_out = str(subject_layout["bids_subject2MNI"]).replace(
+            subject_layout["MNI_template"], "MNI152NLin2009cAsym"
+        )
+        save_outputs_node.inputs.from_template_nonlinear_transform_out = str(
+            subject_layout["bids_MNI2subject"]
+        ).replace(subject_layout["MNI_template"], "MNI152NLin2009cAsym")
+        # Link T1w brain and mask to node
         wf.connect(
             [
-                # For MNI2subject
-                (nii_to_h5_node_MNI2subject, warp_files_list_MNI2subject, [("xfm_h5_out", "file1")]),
-                (input_node, warp_files_list_MNI2subject, [("MNI2009cAsym_to_MNINLin6", "file2")]),
-                (warp_files_list_MNI2subject, compose_transforms_node_MNI2subject, [("combined_files", "warp_files")]),
-                # For subject2MNI
-                (input_node, warp_files_list_subject2MNI, [("MNINLin6_to_MNI2009cAsym", "file1")]),
-                (nii_to_h5_node_subject2MNI, warp_files_list_subject2MNI, [("xfm_h5_out", "file2")]),
-                (warp_files_list_subject2MNI, compose_transforms_node_subject2MNI, [("combined_files", "warp_files")]),
+                (
+                    conform_t1w_node,
+                    anat_nlin_normalization,
+                    [("out_file", "moving_image")],
+                ),
+                (
+                    conform_mask_node,
+                    anat_nlin_normalization,
+                    [("out_file", "moving_mask")],
+                ),
+                (
+                    anat_nlin_normalization,
+                    save_outputs_node,
+                    [
+                        ('composite_transform', 'to_template_nonlinear_transform_in'),
+                        ('inverse_composite_transform', 'from_template_nonlinear_transform_in'),
+                    ],
+                ),
             ]
         )
 
     return wf
 
 
-def create_ingress2qsirecon_wf(layouts, name="ingress2qsirecon_wf", base_dir=os.getcwd()):
+def create_ingress2qsirecon_wf(layouts, name="ingress2qsirecon_wf", base_dir=os.getcwd(), skip_mni2009c_norm=False):
     """
     Creates the overall ingress2qsirecon workflow.
 
@@ -330,7 +361,7 @@ def create_ingress2qsirecon_wf(layouts, name="ingress2qsirecon_wf", base_dir=os.
     print(f"Subject(s) to run: {subjects_to_run}")
 
     for subject_layout in layouts:
-        single_subject_wf = create_single_subject_wf(subject_layout)
+        single_subject_wf = create_single_subject_wf(subject_layout, skip_mni2009c_norm=skip_mni2009c_norm)
         wf.add_nodes([single_subject_wf])
 
     return wf

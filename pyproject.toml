@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "Ingress2QSIRecon"
-version = "0.1.4"
+version = "0.2.0"
 description = "Tool to ingress data from other pipelines for use in QSIRecon"
 authors = ["Steven Meisler <smeisler13@gmail.com>"]
 readme = "README.md"

@@ -77,6 +77,13 @@ def _build_parser(**kwargs):
         "If not specified, the current working directory will be used.",
     )
     optional.add_argument(
+        "--skip-mni2009c-norm",
+        "--skip_mni2009c_norm",
+        action="store_true",
+        default=False,
+        help="Skip MNI normalization step. MNI normalization is not required for all pipelines in QSIRecon.",
+    )
+    optional.add_argument(
         "--check_gradients",
         "--check-gradients",
         action="store_true",

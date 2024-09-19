@@ -12,6 +12,7 @@ import pandas as pd
 import SimpleITK as sitk
 from nilearn import image as nim
 from nipype import logging
+from nipype.interfaces import ants
 from nipype.interfaces.base import (
     BaseInterface,
     BaseInterfaceInputSpec,
@@ -22,7 +23,16 @@ from nipype.interfaces.base import (
     TraitedSpec,
     traits,
 )
+from nipype.interfaces.mixins import reporting
 from nipype.interfaces.workbench.base import WBCommand
+from niworkflows.interfaces.norm import (
+    SpatialNormalization,
+    _SpatialNormalizationInputSpec,
+)
+from niworkflows.interfaces.reportlets.base import (
+    RegistrationRC,
+    _SVGReportCapableInputSpec,
+)
 
 from ingress2qsirecon.utils.functions import to_lps
 
@@ -610,36 +620,44 @@ def _convert_fsl_to_mrtrix(bval_file, bvec_file, output_fname):
     np.savetxt(output_fname, gtab, fmt=["%.8f", "%.8f", "%.8f", "%d"])
 
 
-class _ScansTSVWriterInputSpec(BaseInterfaceInputSpec):
-    filenames = traits.List(traits.Str, mandatory=True, desc="List of filenames")
-    source_files = traits.List(traits.Str, mandatory=True, desc="List of source files")
-    out_file = File("output.tsv", usedefault=True, desc="Output TSV file")
+class RobustMNINormalizationInputSpecRPT(
+    _SVGReportCapableInputSpec,
+    _SpatialNormalizationInputSpec,
+):
+    # Template orientation.
+    orientation = traits.Enum(
+        "LPS",
+        mandatory=True,
+        usedefault=True,
+        desc="modify template orientation (should match input image)",
+    )
 
 
-class _ScansTSVWriterOutputSpec(TraitedSpec):
-    out_file = File(desc="Output TSV file")
+class RobustMNINormalizationOutputSpecRPT(
+    reporting.ReportCapableOutputSpec,
+    ants.registration.RegistrationOutputSpec,
+):
+    # Try to work around TraitError of "undefined 'reference_image' attribute"
+    reference_image = traits.File(desc="the output reference image")
 
 
-class ScansTSVWriter(BaseInterface):
-    input_spec = _ScansTSVWriterInputSpec
-    output_spec = _ScansTSVWriterOutputSpec
+class RobustMNINormalizationRPT(RegistrationRC, SpatialNormalization):
+    input_spec = RobustMNINormalizationInputSpecRPT
+    output_spec = RobustMNINormalizationOutputSpecRPT
 
-    def _run_interface(self, runtime):
-        filenames = self.inputs.filenames
-        source_files = self.inputs.source_files
+    def _post_run_hook(self, runtime):
+        # We need to dig into the internal ants.Registration interface
+        self._fixed_image = self._get_ants_args()["fixed_image"]
+        if isinstance(self._fixed_image, (list, tuple)):
+            self._fixed_image = self._fixed_image[0]  # get first item if list
 
-        # Check if lengths match
-        if len(filenames) != len(source_files):
-            raise ValueError("filenames and source_files must have the same length")
+        if self._get_ants_args().get("fixed_image_mask") is not None:
+            self._fixed_image_mask = self._get_ants_args().get("fixed_image_mask")
+        self._moving_image = self.aggregate_outputs(runtime=runtime).warped_image
+        LOGGER.info(
+            "Report - setting fixed (%s) and moving (%s) images",
+            self._fixed_image,
+            self._moving_image,
+        )
 
-        # Create DataFrame
-        df = pd.DataFrame({"filename": filenames, "source_file": source_files})
-
-        # Write to TSV
-        df.to_csv(self.inputs.out_file, sep='\t', index=False)
-        return runtime
-
-    def _list_outputs(self):
-        outputs = self.output_spec().get().copy()
-        outputs['out_file'] = self.inputs.out_file
-        return outputs
+        return super(RobustMNINormalizationRPT, self)._post_run_hook(runtime)
