@@ -26,7 +26,7 @@ def parse_layout(subject_layout):
     return tuple(subject_layout.values())
 
 
-def create_single_subject_wf(subject_layout):
+def create_single_subject_wf(subject_layout, skip_mni2009c_norm=False):
     """
     Create a nipype workflow to ingest a single subject.
 
@@ -252,7 +252,7 @@ def create_single_subject_wf(subject_layout):
 
     # Now get transform to MNI2009cAsym
     MNI_template = subject_layout["MNI_template"]
-    if MNI_template != "MNI152NLin2009cAsym":
+    if MNI_template != "MNI152NLin2009cAsym" and skip_mni2009c_norm == False:
         # Get MNI brain and mask
         MNI2009cAsym_brain_path = str(
             tflow.get('MNI152NLin2009cAsym', desc="brain", suffix="T1w", resolution=1, extension=".nii.gz")
@@ -333,7 +333,7 @@ def create_single_subject_wf(subject_layout):
     return wf
 
 
-def create_ingress2qsirecon_wf(layouts, name="ingress2qsirecon_wf", base_dir=os.getcwd()):
+def create_ingress2qsirecon_wf(layouts, name="ingress2qsirecon_wf", base_dir=os.getcwd(), skip_mni2009c_norm=False):
     """
     Creates the overall ingress2qsirecon workflow.
 
@@ -361,7 +361,7 @@ def create_ingress2qsirecon_wf(layouts, name="ingress2qsirecon_wf", base_dir=os.
     print(f"Subject(s) to run: {subjects_to_run}")
 
     for subject_layout in layouts:
-        single_subject_wf = create_single_subject_wf(subject_layout)
+        single_subject_wf = create_single_subject_wf(subject_layout, skip_mni2009c_norm=skip_mni2009c_norm)
         wf.add_nodes([single_subject_wf])
 
     return wf
