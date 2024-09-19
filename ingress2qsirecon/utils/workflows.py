@@ -5,7 +5,6 @@ Nipype Workflows for Ingress2Qsirecon
 import os
 from pathlib import Path
 
-from nipype.interfaces.utility import Function
 from nipype.pipeline.engine import Workflow
 from niworkflows.interfaces.images import TemplateDimensions
 from templateflow import api as tflow
