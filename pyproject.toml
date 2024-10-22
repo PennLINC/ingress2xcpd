@@ -1,14 +1,14 @@
 [tool.poetry]
-name = "Ingress2QSIRecon"
-version = "0.2.1"
-description = "Tool to ingress data from other pipelines for use in QSIRecon"
+name = "Ingress2XCPD"
+version = "0.0.1"
+description = "Tool to ingress data from other pipelines for use in XCP_D"
 authors = ["Steven Meisler <smeisler13@gmail.com>"]
 readme = "README.md"
-packages = [{include = "ingress2qsirecon"}]
+packages = [{include = "ingress2xcpd"}]
 
 
 [tool.poetry.scripts]
-ingress2qsirecon = "ingress2qsirecon.cli.main:main"
+ingress2xcpd = "ingress2xcpd.cli.main:main"
 
 
 [tool.poetry.dependencies]
@@ -26,8 +26,8 @@ SimpleITK = "^2.4.0"
 templateflow = "^24.2.0"
 
 [tool.poetry.urls]
-homepage = "https://github.com/PennLINC/ingress2qsirecon"
-repository = "https://github.com/PennLINC/ingress2qsirecon"
+homepage = "https://github.com/PennLINC/ingress2xcpd"
+repository = "https://github.com/PennLINC/ingress2xcpd"
 
 
 [tool.poetry.group.test.dependencies]
